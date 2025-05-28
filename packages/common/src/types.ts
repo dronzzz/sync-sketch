@@ -1,17 +1,17 @@
 import z from 'zod';
 
 export const CreateUserSchema = z.object({
-    username:z.string(),
+    email:z.string(),
     password:z.string().min(6),
     name:z.string()
 })
 export const signInSchema = z.object({
-    username:z.string(),
+    email:z.string(),
     password:z.string().min(6)
 })
 
 export const CreateRoomSchema = z.object({
-    roomName : z.string()
+    slug : z.string(),
 })
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
