@@ -131,6 +131,26 @@ app.post("/create-room", middleware,async (req, res) => {
 
 });
 
+
+app.post("/chats/:roomId",async(req, res)=>{
+
+    const roomId = req.params.roomId;
+
+    const messages = await prisma.chat.findMany({
+        where:{
+            roomId 
+        },
+        orderBy:{
+            id : "desc"
+        },
+        take: 50
+    })
+
+    res.json({
+        messages
+    })
+
+})
 app.listen(port, () => {
     console.log(`server is running on ${port}`);
 });
