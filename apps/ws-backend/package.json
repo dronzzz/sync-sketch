@@ -9,12 +9,14 @@
   },
   "keywords": [],
   "dependencies": {
+    "@repo/backend-common": "workspace:*",
+    "@repo/db": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@repo/backend-common":"workspace:*",
-    "@repo/db":"workspace:*",
-
     "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.15.3",
     "@types/ws": "^8.18.1",
+    "dotenv": "^16.5.0",
+    "ioredis": "^5.6.1",
     "jsonwebtoken": "^9.0.2",
     "ws": "^8.18.2"
   },
