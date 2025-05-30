@@ -1,4 +1,4 @@
-import z from 'zod';
+import {z }from 'zod';
 
 export const CreateUserSchema = z.object({
     email:z.string(),
@@ -15,5 +15,5 @@ export const CreateRoomSchema = z.object({
 })
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
-export type SigiInInput = z.infer<typeof signInSchema>;
-export type CreateRoomSchema = z.infer<typeof CreateRoomSchema>
+export type SignInInput = z.infer<typeof signInSchema>;
+export type CreateRoomInput = z.infer<typeof CreateRoomSchema>

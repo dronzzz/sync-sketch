@@ -2,7 +2,7 @@
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
 import { handleChat, handleJoinRoom, handleLeaveRoom } from './handlers';
-import { parsedData } from './types';
+import { parsedData } from './types/types';
 import { JWT_SECRET } from '@repo/backend-common/config';
 
 
@@ -59,24 +59,32 @@ export class SocketServer{
         }
         ws.on('error', console.error);
         ws.on('message',(data)=> this.handleMessage(data,userId,this.socketMap));
-        ws.on('close',(data) =>this.handleClose(ws))
+        ws.on('close',(data) =>this.handleClose(ws,userId))
 
     }
 
-    private handleClose=(ws:WebSocket)=>{
+    private handleClose=(ws:WebSocket,userId:string)=>{
+        this.socketMap.delete(userId)
         ws.close();
     }
 
     private handleMessage = (data: any,userId:string,socketMap:Map<string,any>) =>{   //Websocket.Rawdata giving error 
     let parsedData;
 
-
-    if (typeof data !== "string") {
-      parsedData = JSON.parse(data.toString())
-    } else {
-      parsedData = JSON.parse(data); // {type: "join-room", roomId: 1}
+    try {
+        
+        
+        if (typeof data !== "string") {
+            parsedData = JSON.parse(data.toString())
+        } else {
+            parsedData = JSON.parse(data); // {type: "join-room", roomId: 1}
+        }
+        
+    } catch (err) {
+         console.error("Invalid JSON received:", data, err);
+        return;
+        
     }
-
 
 
         switch (parsedData.type) {
