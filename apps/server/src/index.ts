@@ -15,6 +15,8 @@ app.use(express.json());
 const port = 3001;
 const saltRound = 11;
 
+
+
 app.get("/", (req, res) => {
     res.json({
         message: "backend working ",
@@ -132,7 +134,7 @@ app.post("/create-room", middleware,async (req, res) => {
 });
 
 
-app.post("/chats/:roomId",async(req, res)=>{
+app.get("/chats/:roomId",async(req, res)=>{
 
     const roomId = req.params.roomId;
 
@@ -148,6 +150,22 @@ app.post("/chats/:roomId",async(req, res)=>{
 
     res.json({
         messages
+    })
+
+})
+app.get("/room/:slug",async(req, res)=>{
+
+    const slug = req.params.slug;
+
+    const roomId = await prisma.room.findFirst({
+    where:{
+            slug 
+        }
+       
+    })
+
+    res.json({
+        roomId
     })
 
 })
