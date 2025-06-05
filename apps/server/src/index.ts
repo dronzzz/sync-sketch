@@ -12,7 +12,7 @@ import { JWT_SECRET } from "@repo/backend-common/config";
 
 const app = express();
 app.use(express.json());
-const port = 3001;
+const port = 3002;
 const saltRound = 11;
 
 

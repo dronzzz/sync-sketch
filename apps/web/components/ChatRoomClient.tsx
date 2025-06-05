@@ -46,7 +46,7 @@ console.log(chats)
                     type:"chat",
                     message : currentMessage,
                     roomId,
-                     userId: "30ba0a22-02d4-423a-af3e-6d555f6ccf41"
+                     
                 }))
                 setCurrentMessage("");}
             }>send message</button>
