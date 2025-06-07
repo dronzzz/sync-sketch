@@ -9,9 +9,10 @@ import { middleware } from "./middleware";
 import { prisma } from "@repo/db/client";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
-
+import cors from "cors";
 const app = express();
 app.use(express.json());
+app.use(cors());
 const port = 3002;
 const saltRound = 11;
 
