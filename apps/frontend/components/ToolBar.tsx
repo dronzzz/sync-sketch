@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { IconButton } from "./IconButton";
-import {  Circle, Hand, MousePointer2,  RectangleHorizontalIcon, Slash } from "lucide-react";
+import {  Circle, Hand, MousePointer2,  Pencil,  RectangleHorizontalIcon, Slash } from "lucide-react";
 import { Tool } from "./Canvas";
 
 export default function ToolBar({
@@ -17,6 +17,7 @@ export default function ToolBar({
             style={{ backgroundColor: "#1a1a1a" }}
         >
             <IconButton icon={<Hand/>}  activated={selectedTool === "panTool" ? true : false} onClick={()=> setSelectedTool("panTool")}/>
+            <IconButton icon={<Pencil/>}  activated={selectedTool === "pencil" ? true : false} onClick={()=> setSelectedTool("pencil")}/>
             <IconButton icon={<RectangleHorizontalIcon/>}  activated={selectedTool === "rect" ? true : false} onClick={()=> setSelectedTool("rect")}/>
             <IconButton icon={<Circle/>}  activated={selectedTool === "ellipse" ? true : false} onClick={()=> setSelectedTool("ellipse")}/>
             <IconButton icon={<Slash/>}  activated={selectedTool === "line" ? true : false} onClick={()=> setSelectedTool("line")}/>

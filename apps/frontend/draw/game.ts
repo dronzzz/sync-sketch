@@ -2,9 +2,18 @@ import { Tool } from "@/components/Canvas";
 import { getExistingShapes } from "./http";
 import { Shape } from "./types";
 import { ShapeRenderer } from "./shapeRenderer";
+import throttle from 'lodash.throttle';
 
+const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string) => {
+  socket.send(JSON.stringify({
+    type: "mouseMovement",
+    x,
+    y,
+    roomId
+  }
 
-
+  ))
+}, 50)
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -18,10 +27,10 @@ export class Game {
   private selectedTool: Tool = "panTool";
   private shapeRenderer: ShapeRenderer;
   private scale: number = 1;
-  private lastPanX: number = 0;
-  private lastPanY: number = 0;
   private panX: number = 0;
   private panY: number = 0;
+
+
 
 
   constructor(canvas: HTMLCanvasElement, socket: WebSocket, roomId: string) {
@@ -50,6 +59,7 @@ export class Game {
     this.selectedTool = tool;
   }
 
+
   initHandlers() {
 
     this.socket.onmessage = (event) => {
@@ -59,6 +69,10 @@ export class Game {
         this.existingShapes.push(JSON.parse(message.message));
         this.clearCanvas();
       }
+      if (message.type === "mouseMovement") {
+        //TODO - redux 
+
+      }
     };
   }
 
@@ -67,7 +81,10 @@ export class Game {
     this.canvas.addEventListener("mousemove", this.handleMouseMove);
     this.canvas.addEventListener("mouseup", this.handleMouseUp);
     this.canvas.addEventListener('wheel', this.handleMouseWheel)
+    document.addEventListener("keydown", this.handleKeys)
   }
+
+
 
   destroy() {
 
@@ -75,6 +92,7 @@ export class Game {
     this.canvas.removeEventListener("mousemove", this.handleMouseMove);
     this.canvas.removeEventListener("mouseup", this.handleMouseUp);
     this.canvas.removeEventListener('wheel', this.handleMouseWheel)
+    document.removeEventListener("keydown", this.handleKeys)
 
 
   }
@@ -88,18 +106,45 @@ export class Game {
     return { x, y }
 
   }
+  handleKeys = (e: KeyboardEvent) => {
+  
+
+    if (e.ctrlKey && e.key === "z") {
+
+      //undo
+
+
+    }
+    if (e.ctrlKey && e.key === "y") {
+
+      //redo 
+
+    }
+  }
 
   handleMouseDown = (e: MouseEvent) => {
     this.clicked = true;
     const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY)
     this.startX = x;
     this.startY = y;
+    if (this.selectedTool === "pencil" && this.clicked === true) {
+      const shape: Shape = {
+        type: "pencil",
+        points: [{ x: this.startX, y: this.startY }]
+      }
+      this.existingShapes.push(shape)
+      
+      
+    }
+
   };
 
   handleMouseUp = (e: MouseEvent) => {
     this.clicked = false;
     let inputShape: Shape | null = null;
-    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
+    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
+
+     
 
     if (this.selectedTool === "rect") {
 
@@ -140,25 +185,36 @@ export class Game {
       }
       this.existingShapes.push(inputShape);
     }
+    if (this.selectedTool === "pencil") {
+      inputShape = this.existingShapes[this.existingShapes.length - 1]  //last shape
+
+    }
 
     if (this.selectedTool !== "panTool") {
 
-      this.socket.send(
-        JSON.stringify({
-          type: "chat",
-          roomId: this.roomId,
-          message: JSON.stringify(inputShape),
-        })
-      );
+      // this.socket.send(
+      //   JSON.stringify({
+      //     type: "chat",
+      //     roomId: this.roomId,
+      //     message: JSON.stringify(inputShape),
+      //   })
+      // );
     }
-
   };
 
+
   handleMouseMove = (e: MouseEvent) => {
+
+    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
+
+    sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId)
+
+
+
+
     if (this.clicked) {
       this.ctx.strokeStyle = "#3d3c3a";
       this.ctx.lineWidth = 5;
-      const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
       if (this.selectedTool === "rect") {
 
         const rectHeight = Number(canvasCoords.y - this.startY);
@@ -194,10 +250,21 @@ export class Game {
           endX: canvasCoords.x,
           endY: canvasCoords.y
         })
+      } else if (this.selectedTool === "pencil") {
+
+
+        const currentShape = this.existingShapes[this.existingShapes.length - 1];
+        if (currentShape.type === "pencil" && Array.isArray((currentShape as any).points)) {
+          (currentShape as { type: "pencil"; points: { x: number; y: number }[] }).points.push({ x: canvasCoords.x, y: canvasCoords.y });   //() to resolve type error 
+          this.shapeRenderer.drawPencil(currentShape);
+        }
+
+
+
       } else if (this.selectedTool === "panTool") {
 
         // this.startX  //initial point which we have to maintain with the canvavs by changin the offset so that the point with resp to canvas remains same
-        const dx = e.movementX;  
+        const dx = e.movementX;
         const dy = e.movementY;
         this.panX += dx;
         this.panY += dy;
@@ -216,27 +283,28 @@ export class Game {
 
       }
     }
-  };
+  }
+
 
   handleMouseWheel = (e: WheelEvent) => {
     e.preventDefault();
-    if(e.ctrlKey === true){
+    if (e.ctrlKey === true) {
 
-  
 
-    const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
-    const newScale = this.scale * zoomFactro;
 
-    const mouseX = e.clientX - this.canvas.offsetLeft;
-    const mouseY = e.clientY - this.canvas.offsetTop;
+      const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
+      const newScale = this.scale * zoomFactro;
 
-    this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
-    this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
+      const mouseX = e.clientX - this.canvas.offsetLeft;
+      const mouseY = e.clientY - this.canvas.offsetTop;
 
-    this.scale = newScale
-    this.clearCanvas();
-      
-        } 
+      this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
+      this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
+
+      this.scale = newScale
+      this.clearCanvas();
+
+    }
 
   }
 
@@ -258,6 +326,9 @@ export class Game {
         this.shapeRenderer.drawEllipse(shape)
       } else if (shape.type === "line") {
         this.shapeRenderer.drawLine(shape)
+      }
+      else if (shape.type === "pencil") {
+        this.shapeRenderer.drawPencil(shape)
       }
     });
   }

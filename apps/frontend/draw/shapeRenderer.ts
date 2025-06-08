@@ -1,8 +1,9 @@
-import { Ellipse, Line, Rect } from "./types";
+import { Ellipse, Line, Pencil, Rect } from "./types";
 
 
 export class ShapeRenderer {
     private ctx: CanvasRenderingContext2D;
+
     constructor(ctx: CanvasRenderingContext2D) {
         this.ctx = ctx;
     }
@@ -24,5 +25,18 @@ export class ShapeRenderer {
         this.ctx.lineTo(shape.endX, shape.endY);
         this.ctx.stroke();
     }
+
+    drawPencil(shape: Pencil) {
+        this.ctx.beginPath()
+        this.ctx.moveTo(shape.points[0].x, shape.points[0].y)
+
+        shape.points.forEach((pt) => {
+            this.ctx.lineTo(pt.x, pt.y);
+        });
+        this.ctx.stroke();
+
+
+    }
+
 
 }

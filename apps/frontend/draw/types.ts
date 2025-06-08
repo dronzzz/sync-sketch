@@ -1,5 +1,5 @@
 
-export type Shape = Rect | Ellipse | Line;
+export type Shape = Rect | Ellipse | Line | Pencil ;
 
 
 
@@ -29,3 +29,10 @@ export interface Line {
     endX : number;
     endY : number;
 }
+
+export interface Pencil{
+    type:"pencil",
+    points:{x:number , y:number}[]
+
+}
+
