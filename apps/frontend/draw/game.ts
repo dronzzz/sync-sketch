@@ -15,8 +15,14 @@ export class Game {
   private startX: number = 0;
   private startY: number = 0;
   private socket: WebSocket;
-  private selectedTool: Tool = "ellipse";
-  private shapeRenderer : ShapeRenderer;
+  private selectedTool: Tool = "panTool";
+  private shapeRenderer: ShapeRenderer;
+  private scale: number = 1;
+  private lastPanX: number = 0;
+  private lastPanY: number = 0;
+  private panX: number = 0;
+  private panY: number = 0;
+
 
   constructor(canvas: HTMLCanvasElement, socket: WebSocket, roomId: string) {
     this.canvas = canvas;
@@ -32,10 +38,13 @@ export class Game {
     this.clearCanvas();
   }
 
+
   async init() {
     this.existingShapes = await getExistingShapes(this.roomId);
     this.clearCanvas();
   }
+
+
 
   setTool(tool: Tool) {
     this.selectedTool = tool;
@@ -57,6 +66,7 @@ export class Game {
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
     this.canvas.addEventListener("mousemove", this.handleMouseMove);
     this.canvas.addEventListener("mouseup", this.handleMouseUp);
+    this.canvas.addEventListener('wheel', this.handleMouseWheel)
   }
 
   destroy() {
@@ -64,21 +74,37 @@ export class Game {
     this.canvas.removeEventListener("mousedown", this.handleMouseDown);
     this.canvas.removeEventListener("mousemove", this.handleMouseMove);
     this.canvas.removeEventListener("mouseup", this.handleMouseUp);
+    this.canvas.removeEventListener('wheel', this.handleMouseWheel)
+
+
+  }
+
+  getUpdatedMouseCoords = (clientX: number, clientY: number) => {
+
+    const rect = this.canvas.getBoundingClientRect();
+    const x = (clientX - rect.left - this.panX) / this.scale
+    const y = (clientY - rect.top - this.panY) / this.scale
+
+    return { x, y }
 
   }
 
   handleMouseDown = (e: MouseEvent) => {
     this.clicked = true;
-    this.startX = e.offsetX;
-    this.startY = e.offsetY;
+    const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY)
+    this.startX = x;
+    this.startY = y;
   };
 
   handleMouseUp = (e: MouseEvent) => {
     this.clicked = false;
     let inputShape: Shape | null = null;
+    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
+
     if (this.selectedTool === "rect") {
-      const rectHeight = Number(e.offsetY - this.startY);
-      const rectWidth = Number(e.offsetX - this.startX);
+
+      const rectHeight = Number(canvasCoords.y - this.startY);
+      const rectWidth = Number(canvasCoords.x - this.startX);
 
       inputShape = {
         type: "rect",
@@ -90,8 +116,8 @@ export class Game {
 
       this.existingShapes.push(inputShape);
     } else if (this.selectedTool === "ellipse") {
-      const width = e.offsetX - this.startX;
-      const height = e.offsetY - this.startY;
+      const width = canvasCoords.x - this.startX;
+      const height = canvasCoords.y - this.startY;
       const radiusX = Math.abs(width / 2)
       const radiusY = Math.abs(height / 2)
 
@@ -104,40 +130,52 @@ export class Game {
       };
 
       this.existingShapes.push(inputShape);
-    } else if (this.selectedTool === "line"){
+    } else if (this.selectedTool === "line") {
       inputShape = {
-        type:"line",
-        startX : this.startX,
-        startY:this.startY,
-        endX: e.offsetX,
-        endY : e.offsetY
+        type: "line",
+        startX: this.startX,
+        startY: this.startY,
+        endX: canvasCoords.x,
+        endY: canvasCoords.y
       }
       this.existingShapes.push(inputShape);
     }
 
-    this.socket.send(
-      JSON.stringify({
-        type: "chat",
-        roomId: this.roomId,
-        message: JSON.stringify(inputShape),
-      })
-    );
+    if (this.selectedTool !== "panTool") {
+
+      this.socket.send(
+        JSON.stringify({
+          type: "chat",
+          roomId: this.roomId,
+          message: JSON.stringify(inputShape),
+        })
+      );
+    }
+
   };
 
   handleMouseMove = (e: MouseEvent) => {
     if (this.clicked) {
       this.ctx.strokeStyle = "#3d3c3a";
       this.ctx.lineWidth = 5;
+      const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
       if (this.selectedTool === "rect") {
-        const rectHeight = Number(e.offsetY - this.startY);
-        const rectWidth = Number(e.offsetX - this.startX);
+
+        const rectHeight = Number(canvasCoords.y - this.startY);
+        const rectWidth = Number(canvasCoords.x - this.startX);
         this.clearCanvas();
-        this.shapeRenderer.drawRect({ type: "rect", x: this.startX, y: this.startY, width: rectWidth, height: rectHeight });
+        this.shapeRenderer.drawRect({
+          type: "rect",
+          x: this.startX,
+          y: this.startY,
+          width: rectWidth,
+          height: rectHeight
+        });
 
       } else if (this.selectedTool === "ellipse") {
 
-        const width = e.offsetX - this.startX;
-        const height = e.offsetY - this.startY;
+        const width = canvasCoords.x - this.startX;
+        const height = canvasCoords.y - this.startY;
         this.clearCanvas();
         this.shapeRenderer.drawEllipse({
           type: "ellipse",
@@ -147,37 +185,80 @@ export class Game {
           radiusY: Math.abs(height / 2)
         });
 
-      }else if (this. selectedTool === "line"){
-         this.clearCanvas();
-      this.shapeRenderer.drawLine({
-        type:"line",
-        startX : this.startX,
-        startY:this.startY,
-        endX: e.offsetX,
-        endY : e.offsetY
-      })
-    }
+      } else if (this.selectedTool === "line") {
+        this.clearCanvas();
+        this.shapeRenderer.drawLine({
+          type: "line",
+          startX: this.startX,
+          startY: this.startY,
+          endX: canvasCoords.x,
+          endY: canvasCoords.y
+        })
+      } else if (this.selectedTool === "panTool") {
+
+        // this.startX  //initial point which we have to maintain with the canvavs by changin the offset so that the point with resp to canvas remains same
+        const dx = e.movementX;  
+        const dy = e.movementY;
+        this.panX += dx;
+        this.panY += dy;
+
+
+        // const dx = e.clientX - this.lastPanX;   //dx is the change in the pan
+        // const dy = e.clientY - this.lastPanY;
+        // this.panX += dx;
+        // this.panY += dy;
+
+        // this.lastPanX = e.clientX;
+        // this.lastPanY = e.clientY;
+
+        this.clearCanvas();
+        // this.ctx.translate(this.panX, this.panY);
+
+      }
     }
   };
 
+  handleMouseWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    if(e.ctrlKey === true){
+
+  
+
+    const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
+    const newScale = this.scale * zoomFactro;
+
+    const mouseX = e.clientX - this.canvas.offsetLeft;
+    const mouseY = e.clientY - this.canvas.offsetTop;
+
+    this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
+    this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
+
+    this.scale = newScale
+    this.clearCanvas();
+      
+        } 
+
+  }
+
   clearCanvas() {
+    this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
     this.ctx.fillStyle = "#0d0c09";
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);   // to cover the whole panned and scaled canvas
     this.ctx.strokeStyle = "#3d3c3a";
 
-    this.ctx.lineWidth = 5;
+    this.ctx.lineWidth = 5 / this.scale;
     this.existingShapes.map((shape) => {
-      console.log(shape);
       if (shape.type === "rect") {
 
         this.shapeRenderer.drawRect(shape)
 
       } else if (shape.type === "ellipse") {
         this.shapeRenderer.drawEllipse(shape)
-      }else if (shape.type === "line"){
-      this.shapeRenderer.drawLine(shape)
-    }
+      } else if (shape.type === "line") {
+        this.shapeRenderer.drawLine(shape)
+      }
     });
   }
 }

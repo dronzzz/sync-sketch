@@ -5,9 +5,7 @@ import { useSocket } from '@/hooks/useSocket';
 
 export default function CanvasClient({ roomId }: { roomId: string }) {
     const { loading, socket } = useSocket();
-    if (loading) {
-        return <div>Connecting ....</div>;
-    }
+    
     if (socket && !loading) {
         socket.send(JSON.stringify({
             type: "join_room",
@@ -20,6 +18,6 @@ export default function CanvasClient({ roomId }: { roomId: string }) {
 
 
     return (
-        <Canvas roomId={roomId} socket={socket} />
+        <Canvas roomId={roomId} socket={socket} loading={loading} />
     )
 }
