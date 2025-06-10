@@ -1,8 +1,19 @@
 "use client";
 import React from "react";
 import { IconButton } from "./IconButton";
-import {  Circle, Hand, MousePointer2,  Pencil,  RectangleHorizontalIcon, Slash } from "lucide-react";
+import {  Circle, Hand, MousePointer2,  Pencil,  RectangleHorizontalIcon, Slash, Type } from "lucide-react";
 import { Tool } from "./Canvas";
+
+export const colors = [
+    { hex: "#000000", name: "Black" },	    { hex: "#000000", name: "Black" },
+    { hex: "#ff0000", name: "Red" },	    { hex: "#ff0000", name: "Red" },
+    { hex: "#00ff00", name: "Green" },	    { hex: "#00ff00", name: "Green" },
+    { hex: "#0000ff", name: "Blue" },	    { hex: "#0000ff", name: "Blue" },
+    { hex: "#ffff00", name: "Yellow" },	    { hex: "#ffff00", name: "Yellow" },
+    { hex: "#ff00ff", name: "Magenta" },	    { hex: "#ff00ff", name: "Magenta" },
+    { hex: "#00ffff", name: "Cyan" },	    { hex: "#00ffff", name: "Cyan" },
+    { hex: "#ffffff", name: "White" },	    { hex: "#ffffff", name: "White" },
+];
 
 export default function ToolBar({
     setSelectedTool,
@@ -11,7 +22,12 @@ export default function ToolBar({
     setSelectedTool: React.Dispatch<React.SetStateAction<Tool>>;
     selectedTool: string;
 }) {
-    return (
+    return (<>
+        <div className="flex flex-row">
+            
+
+
+        </div>
         <div
             className="flex flex-row z-20 absolute bottom-6 right-6 items-center space-x-2 rounded-md p-2"
             style={{ backgroundColor: "#1a1a1a" }}
@@ -21,7 +37,10 @@ export default function ToolBar({
             <IconButton icon={<RectangleHorizontalIcon/>}  activated={selectedTool === "rect" ? true : false} onClick={()=> setSelectedTool("rect")}/>
             <IconButton icon={<Circle/>}  activated={selectedTool === "ellipse" ? true : false} onClick={()=> setSelectedTool("ellipse")}/>
             <IconButton icon={<Slash/>}  activated={selectedTool === "line" ? true : false} onClick={()=> setSelectedTool("line")}/>
+            <IconButton icon={<Type/>}  activated={selectedTool === "text" ? true : false} onClick={()=> setSelectedTool("text")}/>
             <IconButton icon={<MousePointer2 className="rotate-90"/>}  activated={selectedTool === "pointer" ? true : false} onClick={()=> setSelectedTool("pointer")}/>
         </div>
+            </>
     );
 }
+

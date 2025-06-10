@@ -3,6 +3,7 @@ import { getExistingShapes } from "./http";
 import { Shape } from "./types";
 import { ShapeRenderer } from "./shapeRenderer";
 import throttle from 'lodash.throttle';
+import { TextRenderer } from "./textRenderer";
 
 const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string) => {
   socket.send(JSON.stringify({
@@ -26,9 +27,12 @@ export class Game {
   private socket: WebSocket;
   private selectedTool: Tool = "panTool";
   private shapeRenderer: ShapeRenderer;
+  private textRenderer: TextRenderer;
   private scale: number = 1;
   private panX: number = 0;
   private panY: number = 0;
+  private textContent: string;
+  private isTyping: boolean;
 
 
 
@@ -38,7 +42,10 @@ export class Game {
     this.ctx = this.canvas.getContext("2d")!;
     this.existingShapes = [];
     this.shapeRenderer = new ShapeRenderer(this.ctx);
+    this.textRenderer = new TextRenderer(this.ctx)
     this.clicked = false;
+    this.isTyping = false;
+    this.textContent = "";
     this.socket = socket;
     this.roomId = roomId;
     this.init();
@@ -58,7 +65,10 @@ export class Game {
   setTool(tool: Tool) {
     this.selectedTool = tool;
   }
-
+  // private onMouseMoveCallback: ((x: number, y: number) => void) | null = null;
+  // setOnMouseMoveCallback(callback: (x: number, y: number) => void) {
+  //   this.onMouseMoveCallback = callback;
+  // }
 
   initHandlers() {
 
@@ -70,7 +80,7 @@ export class Game {
         this.clearCanvas();
       }
       if (message.type === "mouseMovement") {
-        //TODO - redux 
+        // this.onMouseMoveCallback?.(message.x, message.y);
 
       }
     };
@@ -106,8 +116,43 @@ export class Game {
     return { x, y }
 
   }
+
+  isWritableKey(key: string): boolean {
+    return key.length === 1 || key === " "
+
+  }
   handleKeys = (e: KeyboardEvent) => {
-  
+
+    if (this.selectedTool === "text" && this.isTyping === true) {
+      e.preventDefault();
+
+      if (e.key === "Enter" || e.key === "Escape") {
+        this.isTyping = false;
+        this.textRenderer.stopTextInput();
+      }
+
+      if (e.key === "Backspace") {
+        this.textRenderer.deleteLetter();
+        this.clearCanvas();
+      } else
+        //@ts-ignore
+        if (this.isWritableKey(e.key)) {
+          this.clearCanvas();
+
+
+          this.textRenderer.startTextInput({
+
+            type: "text",
+            textContent: e.key,
+            startX: this.startX,
+            startY: this.startY,
+            maxWidth: Math.abs(2 * this.startX - this.canvas.width)
+          })
+        }
+
+
+    }
+
 
     if (e.ctrlKey && e.key === "z") {
 
@@ -133,9 +178,17 @@ export class Game {
         points: [{ x: this.startX, y: this.startY }]
       }
       this.existingShapes.push(shape)
-      
-      
+
+
     }
+
+
+    if (this.selectedTool === "text" && this.clicked === true) {
+      this.isTyping = true;
+
+      console.log('the current tool selsected is ', this.selectedTool)
+    }
+
 
   };
 
@@ -144,7 +197,7 @@ export class Game {
     let inputShape: Shape | null = null;
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
 
-     
+
 
     if (this.selectedTool === "rect") {
 
@@ -207,7 +260,7 @@ export class Game {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
 
-    sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId)
+    // sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId)
 
 
 
@@ -215,6 +268,7 @@ export class Game {
     if (this.clicked) {
       this.ctx.strokeStyle = "#3d3c3a";
       this.ctx.lineWidth = 5;
+      let inputShape :Shape | null= null
       if (this.selectedTool === "rect") {
 
         const rectHeight = Number(canvasCoords.y - this.startY);
@@ -282,6 +336,13 @@ export class Game {
         // this.ctx.translate(this.panX, this.panY);
 
       }
+
+      this.socket.send(JSON.stringify({
+         type: "shapeUpdates",
+          roomId: this.roomId,
+          message: JSON.stringify(inputShape),
+
+      }))
     }
   }
 

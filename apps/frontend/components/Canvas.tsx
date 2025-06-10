@@ -11,9 +11,20 @@ export default function Canvas({ roomId, socket, loading }: { roomId: string, so
     const [selectedTool, setSelectedTool] = useState<Tool>('ellipse');
     const windowSize = useWindowSize();
     const [game, setGame] = useState<Game>();
-
+    const [height ,setHeight] = useState<number>(0)
+    const [width ,setWidht] = useState<number>(0)
     
 
+    // useEffect(()=>{
+    //     game?.setOnMouseMoveCallback((x,y)=>{
+    //         setWidht(x);
+    //         setHeight(y);
+            
+
+    //     })
+
+        
+    // },[game])
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -42,7 +53,7 @@ export default function Canvas({ roomId, socket, loading }: { roomId: string, so
     return <div>
         <canvas ref={canvasRef} height={window.innerHeight} width={window.innerWidth} className="bg-[#0d0c09]"></canvas>
         <ToolBar setSelectedTool={setSelectedTool} selectedTool={selectedTool} />
-        
+        <MousePositionPointer height={height} width={width} />
 
         <div>
             {loading &&

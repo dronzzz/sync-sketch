@@ -1,4 +1,4 @@
-import { Ellipse, Line, Pencil, Rect } from "./types";
+import { Ellipse, Line, Pencil, Rect, TextInput } from "./types";
 
 
 export class ShapeRenderer {
@@ -34,9 +34,9 @@ export class ShapeRenderer {
             this.ctx.lineTo(pt.x, pt.y);
         });
         this.ctx.stroke();
-
-
     }
+
+
 
 
 }
