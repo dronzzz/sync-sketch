@@ -31,8 +31,9 @@ export class Game {
   private scale: number = 1;
   private panX: number = 0;
   private panY: number = 0;
-  private textContent: string;
   private isTyping: boolean;
+  private selectedColor
+  private currentTheme :string
 
 
 
@@ -45,9 +46,12 @@ export class Game {
     this.textRenderer = new TextRenderer(this.ctx)
     this.clicked = false;
     this.isTyping = false;
-    this.textContent = "";
     this.socket = socket;
     this.roomId = roomId;
+    this.selectedColor = "#3d3c3a";
+    this.currentTheme = "#FFFFFF";
+    this.ctx.fillStyle = this.currentTheme
+    this.ctx.strokeStyle = this.selectedColor
     this.init();
     this.initHandlers();
     this.mouseHandlers();
@@ -65,10 +69,20 @@ export class Game {
   setTool(tool: Tool) {
     this.selectedTool = tool;
   }
-  // private onMouseMoveCallback: ((x: number, y: number) => void) | null = null;
-  // setOnMouseMoveCallback(callback: (x: number, y: number) => void) {
-  //   this.onMouseMoveCallback = callback;
-  // }
+
+  setColor(color:any){
+    this.selectedColor = color.hex;
+      this.ctx.strokeStyle = color.hex;
+
+  }
+
+  setTheme(color:string){
+    this.currentTheme = color;
+    this.ctx.fillStyle = this.currentTheme;
+    this.clearCanvas()
+
+  }
+
 
   initHandlers() {
 
@@ -175,7 +189,9 @@ export class Game {
     if (this.selectedTool === "pencil" && this.clicked === true) {
       const shape: Shape = {
         type: "pencil",
-        points: [{ x: this.startX, y: this.startY }]
+        points: [{ x: this.startX, y: this.startY }],
+        color:this.selectedColor
+
       }
       this.existingShapes.push(shape)
 
@@ -210,6 +226,8 @@ export class Game {
         y: this.startY,
         width: rectWidth,
         height: rectHeight,
+        color:this.selectedColor
+
       };
 
       this.existingShapes.push(inputShape);
@@ -224,7 +242,10 @@ export class Game {
         centerX: this.startX + width / 2,
         centerY: this.startY + height / 2,
         radiusX,
-        radiusY
+        radiusY,
+        color:this.selectedColor
+
+        
       };
 
       this.existingShapes.push(inputShape);
@@ -234,7 +255,9 @@ export class Game {
         startX: this.startX,
         startY: this.startY,
         endX: canvasCoords.x,
-        endY: canvasCoords.y
+        endY: canvasCoords.y,
+        color:this.selectedColor
+
       }
       this.existingShapes.push(inputShape);
     }
@@ -266,7 +289,6 @@ export class Game {
 
 
     if (this.clicked) {
-      this.ctx.strokeStyle = "#3d3c3a";
       this.ctx.lineWidth = 5;
       let inputShape :Shape | null= null
       if (this.selectedTool === "rect") {
@@ -279,7 +301,8 @@ export class Game {
           x: this.startX,
           y: this.startY,
           width: rectWidth,
-          height: rectHeight
+          height: rectHeight,
+          color:this.selectedColor
         });
 
       } else if (this.selectedTool === "ellipse") {
@@ -292,7 +315,9 @@ export class Game {
           centerX: this.startX + width / 2,
           centerY: this.startY + height / 2,
           radiusX: Math.abs(width / 2),
-          radiusY: Math.abs(height / 2)
+          radiusY: Math.abs(height / 2),
+          color:this.selectedColor
+
         });
 
       } else if (this.selectedTool === "line") {
@@ -302,13 +327,15 @@ export class Game {
           startX: this.startX,
           startY: this.startY,
           endX: canvasCoords.x,
-          endY: canvasCoords.y
+          endY: canvasCoords.y,
+          color:this.selectedColor
+
         })
       } else if (this.selectedTool === "pencil") {
 
 
         const currentShape = this.existingShapes[this.existingShapes.length - 1];
-        if (currentShape.type === "pencil" && Array.isArray((currentShape as any).points)) {
+        if (currentShape.type === "pencil") {
           (currentShape as { type: "pencil"; points: { x: number; y: number }[] }).points.push({ x: canvasCoords.x, y: canvasCoords.y });   //() to resolve type error 
           this.shapeRenderer.drawPencil(currentShape);
         }
@@ -373,9 +400,10 @@ export class Game {
     this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    this.ctx.fillStyle = "#0d0c09";
+    this.ctx.fillStyle = this.currentTheme;
+    // this.ctx.fillStyle = "#0d0c09";
     this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);   // to cover the whole panned and scaled canvas
-    this.ctx.strokeStyle = "#3d3c3a";
+
 
     this.ctx.lineWidth = 5 / this.scale;
     this.existingShapes.map((shape) => {

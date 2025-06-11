@@ -9,6 +9,7 @@ export interface Rect {
     y: number;
     width: number;
     height: number;
+    color:string;
 }
 
 export interface Ellipse {
@@ -17,6 +18,8 @@ export interface Ellipse {
     centerY: number;
     radiusX: number;
     radiusY: number;
+    color:string;
+
     // rotation: number;
     // startAngle: number;
     // endAngle: any;
@@ -28,11 +31,15 @@ export interface Line {
     startY : number;
     endX : number;
     endY : number;
+    color:string;
+
 }
 
 export interface Pencil{
     type:"pencil",
     points:{x:number , y:number}[]
+    color:string;
+
 
 }
 

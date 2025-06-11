@@ -4,64 +4,71 @@ import { useEffect, useRef, useState } from "react";
 import ToolBar, { MousePositionPointer } from "./ToolBar";
 import { Game } from "@/draw/game";
 import { useWindowSize } from "@/hooks/useWindowSize";
+import { Color } from "./ColorPicker";
+import { ToggleTheme } from "./ToggleTheme";
+import { useTheme } from "next-themes";
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text";
 
 export default function Canvas({ roomId, socket, loading }: { roomId: string, socket: WebSocket, loading: boolean }) {
     const [selectedTool, setSelectedTool] = useState<Tool>('ellipse');
+    const [selectedColor, setSelectedColor] = useState<Color>({ hex: "#3d3c3a" });
     const windowSize = useWindowSize();
     const [game, setGame] = useState<Game>();
-    const [height ,setHeight] = useState<number>(0)
-    const [width ,setWidht] = useState<number>(0)
-    
-
-    // useEffect(()=>{
-    //     game?.setOnMouseMoveCallback((x,y)=>{
-    //         setWidht(x);
-    //         setHeight(y);
-            
-
-    //     })
-
-        
-    // },[game])
+    const { theme } = useTheme();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    //     useEffect(() => {
-    //     if (canvasRef.current && windowSize.width && windowSize.height) {
-    //         canvasRef.current.width = windowSize.width;
-    //         canvasRef.current.height = windowSize.height;
-    //     }
-    // }, [windowSize]);
+    useEffect(() => {
+        game?.setTool(selectedTool);
+    }, [game, selectedTool]);
 
     useEffect(() => {
-        game?.setTool(selectedTool)
-    }, [game, selectedTool])
+        game?.setColor(selectedColor);
+    }, [selectedColor]);
+
+    useEffect(() => {
+        if (game) {
+            if (theme === "dark") {
+                game.setTheme("#0d0c09");
+            } else {
+                game.setTheme("#ffffff");
+            }
+        }
+    }, [theme, game]);
 
     useEffect(() => {
         if (canvasRef.current) {
-            const g = new Game(canvasRef.current, socket, roomId)
+            const g = new Game(canvasRef.current, socket, roomId);
             setGame(g);
             return () => {
                 g?.destroy();
-            }
+            };
         }
     }, [canvasRef]);
 
+    return (
+        <div className="relative w-full h-screen overflow-hidden">
+            <canvas ref={canvasRef} height={window.innerHeight} width={window.innerWidth} className="bg-white dark:bg-[#0d0c09] touch-none"
+            />
+            
+            <ToolBar
+                setSelectedTool={setSelectedTool}
+                selectedTool={selectedTool}
+                selectedColor={selectedColor}
+                setSelectedColor={setSelectedColor}
+            />
+            
+            <ToggleTheme />
 
-    return <div>
-        <canvas ref={canvasRef} height={window.innerHeight} width={window.innerWidth} className="bg-[#0d0c09]"></canvas>
-        <ToolBar setSelectedTool={setSelectedTool} selectedTool={selectedTool} />
-        <MousePositionPointer height={height} width={width} />
-
-        <div>
-            {loading &&
-                (<div className=" absolute w-screen h-screen flex justify-center items-center text-white z-30">
-                    Connecting.....
-
-                </div>)
-            }
+            {loading && (
+                <div className="fixed inset-0 flex justify-center items-center text-black dark:text-white z-50 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
+                    <div className="text-center">
+                        <div className="text-lg md:text-xl">Connecting...</div>
+                        <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please wait</div>
+                    </div>
+                </div>
+            )}
         </div>
-    </div>
+    );
 }
