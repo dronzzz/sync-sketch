@@ -32,6 +32,7 @@ export class ShapeRenderer {
     }
 
     drawPencil(shape: Pencil) {
+        this.ctx.lineCap = "round"
         this.ctx.strokeStyle=shape.color;
 
         this.ctx.beginPath()

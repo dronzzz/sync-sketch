@@ -4,6 +4,7 @@ import { Shape } from "./types";
 import { ShapeRenderer } from "./shapeRenderer";
 import throttle from 'lodash.throttle';
 import { TextRenderer } from "./textRenderer";
+import { useMouseStore } from "@/store/useMouseStore";
 
 const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string) => {
   socket.send(JSON.stringify({
@@ -86,7 +87,7 @@ export class Game {
 
   initHandlers() {
 
-    this.socket.onmessage = (event) => {
+    this.socket.onmessage = async (event) => {
       const message = JSON.parse(event.data);
 
       if (message.type === "chat") {
@@ -94,7 +95,13 @@ export class Game {
         this.clearCanvas();
       }
       if (message.type === "mouseMovement") {
-        // this.onMouseMoveCallback?.(message.x, message.y);
+        const { setMousePosition } = useMouseStore.getState();
+
+        const screenX = message.x * this.scale + this.panX;  //world coord --> screen coord
+      const screenY = message.y * this.scale + this.panY;
+      
+      setMousePosition(message.userId, screenX, screenY);
+       
 
       }
     };
@@ -121,7 +128,7 @@ export class Game {
 
   }
 
-  getUpdatedMouseCoords = (clientX: number, clientY: number) => {
+  getUpdatedMouseCoords = (clientX: number, clientY: number) => {   //screen coord  -->world coord
 
     const rect = this.canvas.getBoundingClientRect();
     const x = (clientX - rect.left - this.panX) / this.scale
@@ -282,8 +289,7 @@ export class Game {
   handleMouseMove = (e: MouseEvent) => {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
-
-    // sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId)
+    sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId)
 
 
 
@@ -375,24 +381,24 @@ export class Game {
 
 
   handleMouseWheel = (e: WheelEvent) => {
-    e.preventDefault();
-    if (e.ctrlKey === true) {
+      e.preventDefault();
+      if (e.ctrlKey === true) {
 
 
 
-      const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
-      const newScale = this.scale * zoomFactro;
+        const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
+        const newScale = this.scale * zoomFactro;
 
-      const mouseX = e.clientX - this.canvas.offsetLeft;
-      const mouseY = e.clientY - this.canvas.offsetTop;
+        const mouseX = e.clientX - this.canvas.offsetLeft;
+        const mouseY = e.clientY - this.canvas.offsetTop;
 
-      this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
-      this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
+        this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
+        this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
 
-      this.scale = newScale
-      this.clearCanvas();
+        this.scale = newScale
+        this.clearCanvas();
 
-    }
+      }
 
   }
 

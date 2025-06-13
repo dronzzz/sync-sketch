@@ -12,9 +12,10 @@ export default function CanvasClient({ roomId }: { roomId: string }) {
             roomId,
         }))
     }
-    if (!socket) {
-        return null
-    }
+    // if (!socket) {
+    //     return null
+    // }
+  
 
 
     return (

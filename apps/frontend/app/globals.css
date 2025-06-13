@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+
+
 @variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
@@ -19,3 +21,55 @@
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Zoom Prevention and Reset */
+html, body {
+  /* Prevent browser zoom */
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+  
+  /* Lock zoom to 100% */
+  zoom: 1;
+  -moz-transform: scale(1);
+  -webkit-transform: scale(1);
+  transform: scale(1);
+  
+  /* Prevent zoom on mobile */
+  -webkit-user-scalable: no;
+  -moz-user-scalable: no;
+  -ms-user-scalable: no;
+  user-scalable: no;
+  
+  /* Force minimum and maximum scale */
+  min-zoom: 1;
+  max-zoom: 1;
+}
+
+/* Additional zoom prevention for specific elements */
+input, textarea, select {
+  /* Prevent zoom on focus (mobile) */
+  font-size: 16px !important;
+}
+
+/* Prevent pinch zoom gestures */
+* {
+  touch-action: pan-x pan-y;
+}
+
+/* Canvas specific - allow only custom zoom */
+canvas {
+  touch-action: none;
+}
+
+/* For older browsers */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  html {
+    zoom: 1 !important;
+  }
+}
+
+/* Force zoom reset on load */
+@media screen {
+  html {
+    zoom: normal !important;
+  }
+}

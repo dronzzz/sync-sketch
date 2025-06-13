@@ -15,19 +15,23 @@ export const ToggleTheme = () => {
     }, [])
 
     if (!mounted) return null
+    if(theme){
 
-    const currentTheme = resolvedTheme || theme;
+        localStorage.setItem('theme',theme)
+    }
+
+    const currentTheme = localStorage.getItem('theme') || resolvedTheme || theme;
 
     return <div className="top-5 right-5 absolute dark:bg-[#1a1a1a] rounded-xl pointer shadow-even">
        {currentTheme === 'dark' ? (
                     <IconButton 
-                        icon={<Sun className="w-4 h-4 md:w-6 md:h-6" />} 
+                        icon={<Sun className="w-4 h-4 " />} 
                         onClick={() => setTheme('light')}
                         className="p-2 md:p-3"
                     />
                 ) : (
                     <IconButton 
-                        icon={<Moon className="w-4 h-4 md:w-6 md:h-6" />} 
+                        icon={<Moon className="w-4 h-4 " />} 
                         onClick={() => setTheme('dark')}
                         className="p-2 md:p-3"
                     />

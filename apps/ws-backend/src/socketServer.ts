@@ -1,7 +1,7 @@
 
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
-import { handleChat, handleJoinRoom, handleLeaveRoom } from './handlers';
+import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement } from './handlers';
 import { parsedData } from './types/types';
 import { JWT_SECRET } from '@repo/backend-common/config';
 
@@ -96,6 +96,9 @@ export class SocketServer{
                 break;
             case 'chat':
                 handleChat(userId,socketMap,parsedData)
+                break;
+            case 'mouseMovement':
+                handleMouseMovement(userId,socketMap,parsedData)
                 break;
         
             default:

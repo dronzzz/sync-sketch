@@ -1,5 +1,5 @@
 import { redis } from "@repo/backend-common/config";
-import { parsedData } from "./types/types"
+import { mouseMovement, parsedData } from "./types/types"
 
 
 
@@ -38,4 +38,26 @@ export const handleChat = async (userId: string, socketMap: Map<string, WebSocke
         message: parsedData.message,
         userId: userId
     }))
+}
+
+export const handleMouseMovement = async(userId:string,socketMap: Map<string, WebSocket> ,parsedData:mouseMovement) =>{
+    const roomMembers = await redis.smembers(`room:${parsedData.roomId}:userId`)
+
+    roomMembers.forEach(member =>{
+        const ws = socketMap.get(member);
+
+        if(ws){
+            ws.send(JSON.stringify({
+                type:"mouseMovement",
+                x : parsedData.x,
+                y :  parsedData.y,
+                 roomId: parsedData.roomId,
+                userId
+
+            }))
+        }
+    })
+
+
+
 }

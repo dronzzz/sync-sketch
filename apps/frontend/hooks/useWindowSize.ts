@@ -10,7 +10,7 @@ export function useWindowSize(){
         height: undefined
     })
 
-    useEffect(()=>{
+    useEffect(()=>{                                 
         const handleResize = () =>{
             setWindowSize({
                 width : window.innerWidth,
@@ -18,12 +18,13 @@ export function useWindowSize(){
             })
         }
 
-        // handleResize();   //to get the widow res on initial load
+        handleResize();   //to get the widow res on initial load
         window.addEventListener('resize',  handleResize)
 
         return ()=>{
             window.removeEventListener('resize',handleResize)
         }
-    },[])
+    }
+    ,[])
     return windowSize;
 }

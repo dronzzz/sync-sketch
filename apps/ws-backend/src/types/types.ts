@@ -7,7 +7,8 @@ export interface User{
 enum reqTypes {
     join_room,
     leave_room,
-    chat
+    chat,
+    mouseMovement
 }
 
 export interface parsedData {
@@ -16,4 +17,13 @@ export interface parsedData {
     roomId:string;
     message?:string;
     
+}
+
+export interface mouseMovement{
+    type:reqTypes;
+    userId : string;
+    roomId:string;
+    x:number;
+    y:number;
+
 }
