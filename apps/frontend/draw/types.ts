@@ -10,6 +10,8 @@ export interface Rect {
     width: number;
     height: number;
     color:string;
+    lineWidth?: number
+    id? :string;
 }
 
 export interface Ellipse {
@@ -19,6 +21,9 @@ export interface Ellipse {
     radiusX: number;
     radiusY: number;
     color:string;
+    lineWidth?: number
+
+    id?:string;
 
     // rotation: number;
     // startAngle: number;
@@ -32,6 +37,10 @@ export interface Line {
     endX : number;
     endY : number;
     color:string;
+    id? :string;
+    lineWidth?: number
+
+
 
 }
 
@@ -39,6 +48,8 @@ export interface Pencil{
     type:"pencil",
     points:{x:number , y:number}[]
     color:string;
+    id? :string;
+    lineWidth?: number
 
 
 }
@@ -50,5 +61,7 @@ export interface TextInput {
     startY: number;
     maxWidth : number;
     font?:number;
-    color?:number
+    color?:number;
+    lineWidth?: number
+    
 }

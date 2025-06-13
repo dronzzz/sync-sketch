@@ -22,12 +22,12 @@ export default function ColorPicker({
     return (
       
         <div
-            className="flex flex-row cursor-pointer absolute bottom-18 right-45 sm:bottom-23 sm:right-13 rounded-md dark:bg-[#1a1a1a] shadow-even"
+            className="flex flex-row cursor-pointer absolute bottom-18 right-29.5 sm:bottom-18 sm:right-15 rounded-md dark:bg-[#1a1a1a] shadow-even"
 >
             {colors.map((color) => (
                 <div
                     key={color.hex}
-                    className="w-4 h-4 sm:w-6 sm:h-6 m-2 rounded-full hover:scale-120 "
+                    className="w-4 h-4 m-2 rounded-full hover:scale-120 "
                     style={{ backgroundColor: color.hex }}
                     onClick={() => setSelectedColor(color)}
                 />

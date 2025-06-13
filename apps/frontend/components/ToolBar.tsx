@@ -21,6 +21,8 @@ export default function ToolBar({
 }) {
     const [showColorPicker, setShowColorPicker] = useState<boolean>()
     return (<>
+  
+
 
         {
             showColorPicker && <ColorPicker setSelectedColor={setSelectedColor} />
@@ -51,6 +53,7 @@ export default function ToolBar({
             <IconButton icon={<Type className="w-4 h-4 " />} activated={selectedTool === "text"} onClick={() => setSelectedTool("text")} />
             <IconButton icon={<MousePointer2 className="rotate-90 w-4 h-4 " />} activated={selectedTool === "pointer"} onClick={() => setSelectedTool("pointer")} />
         </div>
+              
     </>
     );
 }

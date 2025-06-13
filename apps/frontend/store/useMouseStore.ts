@@ -19,3 +19,19 @@ export const useMouseStore = create<MouseStore>((set) => ({
       },
     })),
 }));
+
+type CursorType ={
+  cursorType : string;
+  setCursorType : (cursor : string ) => void;
+}
+
+
+
+export const useCursorType = create<CursorType>((set) => ({
+  cursorType: '',
+
+  setCursorType: (cursor) =>
+    set(() => ({
+      cursorType: cursor,
+    })),
+}));

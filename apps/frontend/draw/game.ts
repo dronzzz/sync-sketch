@@ -4,7 +4,8 @@ import { Shape } from "./types";
 import { ShapeRenderer } from "./shapeRenderer";
 import throttle from 'lodash.throttle';
 import { TextRenderer } from "./textRenderer";
-import { useMouseStore } from "@/store/useMouseStore";
+import { useCursorType, useMouseStore } from "@/store/useMouseStore";
+import { randomUUID } from "crypto";
 
 const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string) => {
   socket.send(JSON.stringify({
@@ -34,7 +35,16 @@ export class Game {
   private panY: number = 0;
   private isTyping: boolean;
   private selectedColor
-  private currentTheme :string
+  private currentTheme: string
+  private existingPaths: { [key: string]: Path2D }
+  private isHovering: boolean = false; //true if pointer is hover over a shape
+  private selectedShape: Shape | undefined = undefined; //selected for drag/resize
+  private strokeWidth : number = 5;
+  private selectedShapePath : Path2D | undefined = undefined
+  private boundingBox : boolean = false;
+  private isDragging : boolean = false;
+  private prevMouseX : number = 0;
+  private prevMouseY : number = 0;
 
 
 
@@ -43,6 +53,7 @@ export class Game {
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d")!;
     this.existingShapes = [];
+    this.existingPaths = {}
     this.shapeRenderer = new ShapeRenderer(this.ctx);
     this.textRenderer = new TextRenderer(this.ctx)
     this.clicked = false;
@@ -71,13 +82,13 @@ export class Game {
     this.selectedTool = tool;
   }
 
-  setColor(color:any){
+  setColor(color: any) {
     this.selectedColor = color.hex;
-      this.ctx.strokeStyle = color.hex;
+    this.ctx.strokeStyle = color.hex;
 
   }
 
-  setTheme(color:string){
+  setTheme(color: string) {
     this.currentTheme = color;
     this.ctx.fillStyle = this.currentTheme;
     this.clearCanvas()
@@ -98,10 +109,10 @@ export class Game {
         const { setMousePosition } = useMouseStore.getState();
 
         const screenX = message.x * this.scale + this.panX;  //world coord --> screen coord
-      const screenY = message.y * this.scale + this.panY;
-      
-      setMousePosition(message.userId, screenX, screenY);
-       
+        const screenY = message.y * this.scale + this.panY;
+
+        setMousePosition(message.userId, screenX, screenY);
+
 
       }
     };
@@ -188,16 +199,77 @@ export class Game {
     }
   }
 
+  getBoundingBox = (shape:Shape)=>{
+     let boundX = 0, boundY = 0, boundWidth = 0, boundHeight = 0;
+
+    if (shape.type === 'rect') {
+      boundX = shape.x -10;
+      boundY = shape.y -10;
+      boundWidth = shape.width + 20;
+      boundHeight = shape.height + 20;
+
+    } else if (shape.type === 'ellipse') {
+      boundX = shape.centerX - shape.radiusX -10;
+      boundY = shape.centerY - shape.radiusY -10;
+      boundWidth = shape.radiusX * 2 + 20;
+      boundHeight = shape.radiusY * 2 + 20;
+
+    } 
+    const path = new Path2D;
+    path.rect(boundX,boundY,boundWidth,boundHeight);
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeStyle = '#a6a3ea';
+    this.ctx.stroke(path);
+    this.boundingBox = true
+    this.selectedShapePath = path ;
+    return path;
+  }
+
   handleMouseDown = (e: MouseEvent) => {
     this.clicked = true;
-    const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY)
+        const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY)
     this.startX = x;
     this.startY = y;
+
+    if(this.boundingBox){
+      console.log('checking if inside the selcted region')
+      if(this.selectedShapePath){
+        
+        if(this.ctx.isPointInPath(this.selectedShapePath,this.startX,this.startY) === false) {
+          this.clearCanvas();
+          this.selectedShapePath = undefined;
+          this.selectedShape = undefined;
+          this.boundingBox = false;
+        }else {
+          console.log('is draggin to true ')
+          // if(this.isDragging === false) this.boundingBox = false
+          this.prevMouseX = x;
+  this.prevMouseY = y;
+          this.isDragging = true;
+        }
+      }
+
+    }
+
+
+
+  
+
+
+   if (this.isHovering && this.selectedShape) {
+    this.getBoundingBox(this.selectedShape)
+
+
+
+  }
+
+
     if (this.selectedTool === "pencil" && this.clicked === true) {
       const shape: Shape = {
         type: "pencil",
         points: [{ x: this.startX, y: this.startY }],
-        color:this.selectedColor
+        color: this.selectedColor,
+        id: crypto.randomUUID()
 
       }
       this.existingShapes.push(shape)
@@ -220,6 +292,10 @@ export class Game {
     let inputShape: Shape | null = null;
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
 
+    if(this.isDragging){
+      this.isDragging = false
+    }
+
 
 
     if (this.selectedTool === "rect") {
@@ -233,7 +309,9 @@ export class Game {
         y: this.startY,
         width: rectWidth,
         height: rectHeight,
-        color:this.selectedColor
+        color: this.selectedColor,
+        id: crypto.randomUUID()
+
 
       };
 
@@ -250,9 +328,10 @@ export class Game {
         centerY: this.startY + height / 2,
         radiusX,
         radiusY,
-        color:this.selectedColor
+        color: this.selectedColor,
+        id: crypto.randomUUID()
 
-        
+
       };
 
       this.existingShapes.push(inputShape);
@@ -263,7 +342,8 @@ export class Game {
         startY: this.startY,
         endX: canvasCoords.x,
         endY: canvasCoords.y,
-        color:this.selectedColor
+        color: this.selectedColor,
+        id: crypto.randomUUID()
 
       }
       this.existingShapes.push(inputShape);
@@ -285,18 +365,83 @@ export class Game {
     }
   };
 
+  isPointingShape = async (e: MouseEvent) => {
+    const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
+    const { cursorType, setCursorType } = useCursorType.getState();
 
-  handleMouseMove = (e: MouseEvent) => {
+
+      this.isHovering = false;
+    Object.entries(this.existingPaths).forEach(([id, path]) => {
+      if (this.ctx.isPointInStroke(path, x, y)) {
+        console.log("found it ------------------------------------------------------------->")
+        this.isHovering = true;
+        this.selectedShape = this.existingShapes.find(shape => shape.id === id)
+      }
+    })
+
+    const nextCursor = this.isHovering ? 'cursor-move' : 'cursor-default';
+
+    if (cursorType !== nextCursor) {
+      setCursorType(nextCursor);
+    }
+  };
+
+
+
+  handleMouseMove = async(e: MouseEvent) => {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
     sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId)
+
+      if(this.selectedTool === "pointer" && this.isDragging){
+        console.log('mouse moving n drag state')
+        const currentshape = this.existingShapes.find(shape => shape.id === this.selectedShape?.id)
+
+        const {x,y} = await this.getUpdatedMouseCoords(e.clientX,e.clientY)
+      if(currentshape?.type === 'rect'){
+
+        const dx = x - this.prevMouseX
+        const dy =y - this.prevMouseY
+      
+
+        
+          currentshape.x += dx
+          currentshape.y +=dy
+          this.selectedShape  = currentshape
+          
+
+        }else if (currentshape?.type === 'ellipse') {
+
+    const dx = x - this.prevMouseX;
+    const dy = y - this.prevMouseY;
+
+    currentshape.centerX += dx;  
+    currentshape.centerY += dy;  
+
+    this.selectedShape = currentshape; 
+        }
+        this.prevMouseX = x;
+this.prevMouseY = y;
+this.clearCanvas();
+
+
+      
+
+    }else
+
+
+    if (this.selectedTool === "pointer") {
+      this.isPointingShape(e)
+    }
+
+  
 
 
 
 
     if (this.clicked) {
-      this.ctx.lineWidth = 5;
-      let inputShape :Shape | null= null
+      this.ctx.lineWidth = this.strokeWidth;
+      let inputShape: Shape | null = null
       if (this.selectedTool === "rect") {
 
         const rectHeight = Number(canvasCoords.y - this.startY);
@@ -308,7 +453,7 @@ export class Game {
           y: this.startY,
           width: rectWidth,
           height: rectHeight,
-          color:this.selectedColor
+          color: this.selectedColor
         });
 
       } else if (this.selectedTool === "ellipse") {
@@ -322,7 +467,7 @@ export class Game {
           centerY: this.startY + height / 2,
           radiusX: Math.abs(width / 2),
           radiusY: Math.abs(height / 2),
-          color:this.selectedColor
+          color: this.selectedColor
 
         });
 
@@ -334,7 +479,7 @@ export class Game {
           startY: this.startY,
           endX: canvasCoords.x,
           endY: canvasCoords.y,
-          color:this.selectedColor
+          color: this.selectedColor
 
         })
       } else if (this.selectedTool === "pencil") {
@@ -371,9 +516,9 @@ export class Game {
       }
 
       this.socket.send(JSON.stringify({
-         type: "shapeUpdates",
-          roomId: this.roomId,
-          message: JSON.stringify(inputShape),
+        type: "shapeUpdates",
+        roomId: this.roomId,
+        message: JSON.stringify(inputShape),
 
       }))
     }
@@ -381,24 +526,24 @@ export class Game {
 
 
   handleMouseWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.ctrlKey === true) {
+    e.preventDefault();
+    if (e.ctrlKey === true) {
 
 
 
-        const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
-        const newScale = this.scale * zoomFactro;
+      const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
+      const newScale = this.scale * zoomFactro;
 
-        const mouseX = e.clientX - this.canvas.offsetLeft;
-        const mouseY = e.clientY - this.canvas.offsetTop;
+      const mouseX = e.clientX - this.canvas.offsetLeft;
+      const mouseY = e.clientY - this.canvas.offsetTop;
 
-        this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
-        this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
+      this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
+      this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
 
-        this.scale = newScale
-        this.clearCanvas();
+      this.scale = newScale
+      this.clearCanvas();
 
-      }
+    }
 
   }
 
@@ -407,23 +552,62 @@ export class Game {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.ctx.fillStyle = this.currentTheme;
-    // this.ctx.fillStyle = "#0d0c09";
-    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);   // to cover the whole panned and scaled canvas
+    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);
+
+    this.ctx.lineWidth = this.strokeWidth / this.scale;
+    
+    if (this.selectedShape && this.boundingBox) {
+  const path = this.getBoundingBox(this.selectedShape);
+  this.selectedShapePath = path;
+
+  this.ctx.lineWidth = 1 / this.scale;
+  this.ctx.strokeStyle = '#6965db';
+  this.ctx.stroke(path);
+}
+
+  this.ctx.lineWidth = this.strokeWidth / this.scale;
+  this.ctx.strokeStyle = this.selectedColor;
+
+    this.existingPaths = {};
+
+   
 
 
-    this.ctx.lineWidth = 5 / this.scale;
-    this.existingShapes.map((shape) => {
+
+
+    this.existingShapes.forEach((shape) => {
+      const path = new Path2D();
+
       if (shape.type === "rect") {
-
-        this.shapeRenderer.drawRect(shape)
-
+        path.rect(shape.x, shape.y, shape.width, shape.height);
+        this.shapeRenderer.drawRect(shape);
       } else if (shape.type === "ellipse") {
-        this.shapeRenderer.drawEllipse(shape)
+        path.ellipse(
+          shape.centerX,
+          shape.centerY,
+          shape.radiusX,
+          shape.radiusY,
+          0,
+          0,
+          Math.PI * 2
+        );
+        this.shapeRenderer.drawEllipse(shape);
       } else if (shape.type === "line") {
-        this.shapeRenderer.drawLine(shape)
+        path.moveTo(shape.startX, shape.startY);
+        path.lineTo(shape.endX, shape.endY);
+        this.shapeRenderer.drawLine(shape);
+      } else if (shape.type === "pencil") {
+        if (shape.points && shape.points.length > 1) {
+          path.moveTo(shape.points[0].x, shape.points[0].y);
+          for (let i = 1; i < shape.points.length; i++) {
+            path.lineTo(shape.points[i].x, shape.points[i].y);
+          }
+        }
+        this.shapeRenderer.drawPencil(shape);
       }
-      else if (shape.type === "pencil") {
-        this.shapeRenderer.drawPencil(shape)
+
+      if (shape.id) {
+        this.existingPaths[shape.id] = path;
       }
     });
   }
