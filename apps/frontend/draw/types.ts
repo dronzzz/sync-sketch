@@ -10,7 +10,7 @@ export interface Rect {
     width: number;
     height: number;
     color:string;
-    lineWidth: number
+    lineWidth: number;
     id? :string;
 }
 
@@ -21,7 +21,7 @@ export interface Ellipse {
     radiusX: number;
     radiusY: number;
     color:string;
-    lineWidth: number
+    lineWidth: number;
 
     id?:string;
 

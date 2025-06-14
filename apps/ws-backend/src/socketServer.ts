@@ -1,8 +1,7 @@
 
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
-import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement } from './handlers';
-import { parsedData } from './types/types';
+import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate } from './handlers';
 import { JWT_SECRET } from '@repo/backend-common/config';
 
 
@@ -52,11 +51,11 @@ export class SocketServer{
         const token = queryParam.get('token') || "";
 
         const userId = this.checkUser(token);
-        this.socketMap.set(userId,ws);
         if (userId == null) {
         ws.close();
         return;
         }
+        this.socketMap.set(userId,ws);
         ws.on('error', console.error);
         ws.on('message',(data)=> this.handleMessage(data,userId,this.socketMap));
         ws.on('close',(data) =>this.handleClose(ws,userId))
@@ -86,6 +85,8 @@ export class SocketServer{
         
     }
 
+    console.log('handlemessage" ' , parsedData)
+
 
         switch (parsedData.type) {
             case 'join_room':
@@ -99,6 +100,12 @@ export class SocketServer{
                 break;
             case 'mouseMovement':
                 handleMouseMovement(userId,socketMap,parsedData)
+                break;
+            case 'shapeUpdate':
+                handleShapeUpdate(userId,socketMap,parsedData)
+                break;
+            case 'shapePreview':
+                handleShapePreview(userId,socketMap,parsedData)
                 break;
         
             default:

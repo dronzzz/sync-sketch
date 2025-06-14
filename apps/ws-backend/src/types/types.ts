@@ -8,13 +8,15 @@ enum reqTypes {
     join_room,
     leave_room,
     chat,
-    mouseMovement
+    mouseMovement,
 }
 
 export interface parsedData {
     type:reqTypes;
     userId : string;
     roomId:string;
+    shapeId:string;
+    shapeType?:string
     message?:string;
     
 }
@@ -26,4 +28,9 @@ export interface mouseMovement{
     x:number;
     y:number;
 
+}
+
+
+export interface previewShape extends parsedData{
+    previewType : string;
 }

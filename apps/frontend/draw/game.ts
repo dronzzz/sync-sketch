@@ -18,10 +18,18 @@ const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roo
     x,
     y,
     roomId
-  }
+  }))
+}, 100)
 
-  ))
-}, 50)
+const sendShapePreview = throttle((socket: WebSocket, inputShape:Shape, roomId: string , preview:string)=>{
+  
+      socket.send(JSON.stringify({
+      type: "shapePreview",
+      roomId: roomId,
+      message: JSON.stringify(inputShape),
+      previewType: preview
+    }))
+},150)
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -44,7 +52,6 @@ export class Game {
   private existingPaths: { [key: string]: Path2D }
   private strokeWidth: number = 5;
   private isHovering: boolean = false; //true if pointer is hover over a shape
-  private boundingBox: boolean = false;
   private selectionState: SelectionState = {
     selectedShape: null,
     isDraggin: false,
@@ -103,6 +110,7 @@ export class Game {
 
     this.socket.onmessage = async (event) => {
       const message = JSON.parse(event.data);
+      
 
       if (message.type === "chat") {
         this.existingShapes.push(JSON.parse(message.message));
@@ -110,13 +118,32 @@ export class Game {
       }
       if (message.type === "mouseMovement") {
         const { setMousePosition } = useMouseStore.getState();
-
         const screenX = message.x * this.scale + this.panX;  //world coord --> screen coord
         const screenY = message.y * this.scale + this.panY;
-
         setMousePosition(message.userId, screenX, screenY);
+      }
 
+      if(message.type === 'shapeUpdate'){
+          const updatedShape: Shape = JSON.parse(message.message);
 
+          const i = this.existingShapes.findIndex(shape => shape.id === updatedShape.id);
+
+          if(i !== -1){
+            this.existingShapes[i] = updatedShape
+          }else {
+            this.existingShapes.push(updatedShape)
+
+          }
+          this.clearCanvas();
+      }else if(message.type === 'shapePreview'){
+        const previewShape = JSON.parse(message.message)
+        this.clearCanvas()
+        if(message.previewType === 'modification'){
+          this.existingShapes = this.existingShapes.filter(shape => shape.id !== previewShape.id);
+
+        }
+        this.drawAllShapes(previewShape)
+        
       }
     };
   }
@@ -201,8 +228,6 @@ export class Game {
     }
   }
 
-
-
   getBoundingBox = (shape: Shape) => {
     let boundX = 0, boundY = 0, boundWidth = 0, boundHeight = 0;
 
@@ -223,7 +248,6 @@ export class Game {
     path.rect(boundX, boundY, boundWidth, boundHeight);
     return path;
   }
-
 
   handleShapeSelectionMouseDown = (x:number,y:number) => {
     if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState.selectedShape), this.startX, this.startY)) {
@@ -295,6 +319,12 @@ export class Game {
       this.selectionState.isDraggin = false;
 
       //send shape updates
+      this.socket.send(JSON.stringify({
+         type: "shapeUpdate",
+          roomId: this.roomId,
+          message: JSON.stringify(this.selectionState.selectedShape),
+          shapeId : this.selectionState.selectedShape?.id
+      }))
     }
 
 
@@ -305,6 +335,7 @@ export class Game {
       const rectHeight = Number(canvasCoords.y - this.startY);
       const rectWidth = Number(canvasCoords.x - this.startX);
 
+
       inputShape = {
         type: "rect",
         x: this.startX,
@@ -312,7 +343,8 @@ export class Game {
         width: rectWidth,
         height: rectHeight,
         color: this.selectedColor,
-        id: crypto.randomUUID()
+        id: crypto.randomUUID(),
+        lineWidth : this.strokeWidth
 
 
       };
@@ -331,7 +363,9 @@ export class Game {
         radiusX,
         radiusY,
         color: this.selectedColor,
-        id: crypto.randomUUID()
+         id: crypto.randomUUID(),
+        lineWidth : this.strokeWidth,
+        
 
 
       };
@@ -345,22 +379,26 @@ export class Game {
         endX: canvasCoords.x,
         endY: canvasCoords.y,
         color: this.selectedColor,
-        id: crypto.randomUUID()
+        id: crypto.randomUUID(),
+        lineWidth : this.strokeWidth
 
       }
       this.existingShapes.push(inputShape);
     } else if (this.selectedTool === "pencil") {
       inputShape = this.existingShapes[this.existingShapes.length - 1]  //last shape
 
-    } else if (this.selectedTool !== "panTool") {
+    } 
+    if (inputShape) {
 
-      // this.socket.send(
-      //   JSON.stringify({
-      //     type: "chat",
-      //     roomId: this.roomId,
-      //     message: JSON.stringify(inputShape),
-      //   })
-      // );
+      this.socket.send(
+        JSON.stringify({
+          type: "chat",
+          roomId: this.roomId,
+          message: JSON.stringify(inputShape),
+          shapeId : inputShape.id,
+          shapeType: inputShape.type
+        })
+      );
     }
   };
 
@@ -409,6 +447,10 @@ export class Game {
     }
     this.selectionState.dragStartX = x
     this.selectionState.dragStartY = y
+    if(currentShape){
+
+      sendShapePreview(this.socket,currentShape,this.roomId,'modification')
+    }
     this.clearCanvas()
 
 
@@ -495,12 +537,11 @@ export class Game {
       default:
         break;
     }
-    this.socket.send(JSON.stringify({
-      type: "shapeUpdates",
-      roomId: this.roomId,
-      message: JSON.stringify(inputShape),
+    if(inputShape){
+      console.log('input shape send in preview',inputShape)
+      sendShapePreview(this.socket,inputShape,this.roomId,'new')
 
-    }))
+    }
 
   }
 
