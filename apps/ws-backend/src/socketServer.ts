@@ -84,8 +84,10 @@ export class SocketServer{
         return;
         
     }
+    if(parsedData.type !== "mouseMovement"){
+        console.log('handlemessage" ' , parsedData)
 
-    console.log('handlemessage" ' , parsedData)
+    }
 
 
         switch (parsedData.type) {

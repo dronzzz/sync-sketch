@@ -1,5 +1,5 @@
 
-export type Shape = Rect | Ellipse | Line | Pencil  ;
+export type Shape = Rect | Ellipse | Line | Pencil | TextInput ;
 
 
 
@@ -32,8 +32,8 @@ export interface Ellipse {
 
 export interface Line {
     type : "line";
-    startX : number;
-    startY : number;
+    startX : number;  
+    startY : number;   
     endX : number;
     endY : number;
     color:string;
@@ -57,11 +57,11 @@ export interface Pencil{
 export interface TextInput {
     type: "text",
     textContent : string;
-    startX : number;
-    startY: number;
+    startX : number;   //startX
+    startY: number;    //startY
     maxWidth : number;
     font?:number;
     color?:number;
-    lineWidth: number
-    
+    lineWidth: number;
+    id? :string;    
 }

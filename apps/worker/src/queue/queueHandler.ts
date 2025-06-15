@@ -17,10 +17,12 @@ export async function startWorker() {
 
             switch (parsedMessage.type) {
                 case 'chat':
-                    return handleChatCreation(parsedMessage);
+                    await handleChatCreation(parsedMessage);
+                    break;
 
                 case 'shapeUpdate':
-                    return handleShapeUpdateDb(parsedMessage);
+                    await handleShapeUpdateDb(parsedMessage);
+                    break;
 
                 default:
                     console.warn(`Unknown message type: ${parsedMessage.type}`);
