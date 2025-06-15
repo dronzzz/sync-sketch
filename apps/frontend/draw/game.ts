@@ -1,6 +1,6 @@
 import { Tool } from "@/components/Canvas";
 import { getExistingShapes } from "./http";
-import { Shape } from "./types";
+import { Rect, Shape } from "./types";
 import { ShapeRenderer } from "./shapeRenderer";
 import throttle from 'lodash.throttle';
 import { TextRenderer } from "./textRenderer";
@@ -52,6 +52,7 @@ export class Game {
   private existingPaths: { [key: string]: Path2D }
   private strokeWidth: number = 5;
   private isHovering: boolean = false; //true if pointer is hover over a shape
+  private Handle_size : number = 8;
   private selectionState: SelectionState = {
     selectedShape: null,
     isDraggin: false,
@@ -228,6 +229,45 @@ export class Game {
     }
   }
 
+  getResizeHandlers = (bounds:{
+    x:number;
+    y:number;
+    width:number;
+    height:number;
+  })=>{
+
+    const handleSize = this.Handle_size / this.scale;
+    const halfHandle = handleSize/2
+
+    const handles = [
+    {
+      type: "top-left",
+      x: bounds.x - halfHandle,
+      y: bounds.y - halfHandle,
+    },
+    {
+      type: "top-right",
+      x: bounds.x + bounds.width - halfHandle,
+      y: bounds.y - halfHandle,
+    },
+    {
+      type: "bottom-left",
+      x: bounds.x - halfHandle,
+      y: bounds.y + bounds.height - halfHandle,
+    },
+    {
+      type: "bottom-right",
+      x: bounds.x + bounds.width - halfHandle,
+      y: bounds.y + bounds.height - halfHandle,
+    },
+  ];
+
+    return handles
+
+  }
+
+
+
   getBoundingBox = (shape: Shape) => {
     let boundX = 0, boundY = 0, boundWidth = 0, boundHeight = 0;
 
@@ -269,11 +309,14 @@ export class Game {
 
     const path = new Path2D;
     path.rect(boundX, boundY, boundWidth, boundHeight);
-    return path;
+    return {
+      path,
+       bounds: { x: boundX, y: boundY, width: boundWidth, height: boundHeight }
+    };
   }
 
   handleShapeSelectionMouseDown = (x: number, y: number) => {
-    if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState.selectedShape), this.startX, this.startY)) {
+    if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState.selectedShape).path, this.startX, this.startY)) {
       console.log('is inside the bounding box')
       this.selectionState.isDraggin = true;
       this.selectionState.dragStartX = x;
@@ -656,13 +699,38 @@ export class Game {
     });
   }
 
-  drawBoundingBox = (shape: Shape) => {
+  drawBoundingBox = (shape: any) => {
+    const handleSize = this.Handle_size / this.scale
     this.ctx.save()
-    const path = this.getBoundingBox(shape);
+    const {path,bounds} = this.getBoundingBox(shape);
     this.ctx.lineWidth = 1 / this.scale;
     this.ctx.strokeStyle = '#302c94';
     this.ctx.stroke(path);
+
     this.ctx.restore();
+    
+    this.ctx.save();
+    if(this.currentTheme === "#0d0c09"){
+
+      this.ctx.fillStyle = '#0d0c09';
+    }else{
+      this.ctx.fillStyle = '#ffffff';
+
+    }
+    this.ctx.lineWidth = 1/ this.scale;
+    this.ctx.strokeStyle = '#302c94';
+
+
+  
+    const handlers = this.getResizeHandlers(bounds)
+    handlers.forEach(handle =>{
+      this.ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
+      this.ctx.strokeRect(handle.x, handle.y, handleSize, handleSize);
+      
+    })
+    
+    this.ctx.restore();
+
   }
 
   drawAllShapes = (shape: Shape) => {
