@@ -157,10 +157,10 @@ export class SocketServer{
 
         switch (parsedData.type) {
             case 'join_room':
-                handleJoinRoom(userId,parsedData)
+                handleJoinRoom(userId,parsedData,sessionId)
                 break;
             case 'leave_room':
-                handleLeaveRoom(userId,parsedData)
+                handleLeaveRoom(userId,parsedData, sessionId)
                 break;
             case 'chat':
                 handleChat(userId,this.sessions,this.userSessions,parsedData,sessionId)
