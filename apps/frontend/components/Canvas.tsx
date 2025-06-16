@@ -9,6 +9,7 @@ import { ToggleTheme } from "./ToggleTheme";
 import { useTheme } from "next-themes";
 import MousePositionPointer from "./MousePositionPointer";
 import { useCursorType } from "@/store/useMouseStore";
+import { useSocket } from "@/hooks/useSocket";
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text";
 
@@ -18,7 +19,8 @@ export default function Canvas({ roomId, socket, loading }: { roomId: string, so
     const windowSize = useWindowSize();
     const [game, setGame] = useState<Game | null>(null);
     const { theme } = useTheme();
-    const cursorType = useCursorType((state)=> state.cursorType)
+    const cursorType = useCursorType((state)=> state.cursorType);
+    const { sessionId } = useSocket();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     useEffect(()=>{
@@ -46,14 +48,15 @@ export default function Canvas({ roomId, socket, loading }: { roomId: string, so
     }, [theme, game]);
 
     useEffect(() => {
-        if (canvasRef.current &&!game && theme && socket ) {
+        if (canvasRef.current && !game && theme && socket && sessionId) {
             const g = new Game(canvasRef.current, socket, roomId);
+            g.setSessionId(sessionId);
             setGame(g);
             return () => {
                 g?.destroy();
             };
         }
-    }, [canvasRef,socket]);
+    }, [canvasRef, socket, sessionId]);
 
     return (
         <div className="relative w-full h-screen overflow-hidden">

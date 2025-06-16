@@ -1,13 +1,22 @@
 
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
-import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate } from './handlers';
+import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, removeUserFromRoom } from './handlers';
 import { JWT_SECRET } from '@repo/backend-common/config';
 
+
+export interface ClientSession{
+    sessionId : string;
+    userId : string;
+    ws : WebSocket;
+}
 
 export class SocketServer{
     private static instance: SocketServer;
     private wss:WebSocketServer;
+    public socketMap:Map<string,WebSocket> = new Map();
+    private sessions: Map<string,ClientSession> = new Map();
+    private userSessions: Map<string,Set<string>> = new Map();
 
 
     
@@ -23,7 +32,6 @@ export class SocketServer{
         return SocketServer.instance
 
     }
-    public socketMap:Map<string,WebSocket> = new Map();
 
     private checkUser = (token:string) =>{
         try {
@@ -40,6 +48,40 @@ export class SocketServer{
         }
 
     }
+    private cleanUpSession = (sessionId:string) =>{
+        const session = this.sessions.get(sessionId)
+        if(!session) return;
+
+        this.sessions.delete(sessionId)
+        const userSessions = this.userSessions.get(session.userId);
+        if(userSessions){
+            userSessions.delete(sessionId)
+            if (userSessions.size === 0) {
+                this.userSessions.delete(session.userId);
+                removeUserFromRoom(session.userId,sessionId)
+            }
+
+        }
+    }
+
+    private heartBeat = (sessionId:string) =>{
+        const session = this.sessions.get(sessionId);
+        if(!session) return;
+
+        const pingInterval = setInterval(()=>{
+            if(session?.ws.readyState === WebSocket.OPEN){
+                session.ws.ping();
+            }else{
+                this.cleanUpSession(sessionId);
+                clearInterval(pingInterval)
+
+            }
+
+        },30000)
+        session.ws.on('pong', () => {
+            
+        });
+    }
 
     private handleConnection =(ws:WebSocket, request:any)=>{
         const url = request.url;
@@ -55,9 +97,30 @@ export class SocketServer{
         ws.close();
         return;
         }
-        this.socketMap.set(userId,ws);
+
+        const sessionId = crypto.randomUUID();
+        const session : ClientSession = {
+            sessionId,
+            userId,
+            ws
+        }
+        this.sessions.set(sessionId,session)
+
+        if(!this.userSessions.has(userId)){
+            this.userSessions.set(userId,new Set())
+        }
+        this.userSessions.get(userId)?.add(sessionId);
+
+        ws.send(JSON.stringify({
+            type: "session-init",
+            sessionId
+        }));
+
+        this.heartBeat(sessionId)
+        console.log('setting sesssion id as -----------------------------',sessionId)
+        
         ws.on('error', console.error);
-        ws.on('message',(data)=> this.handleMessage(data,userId,this.socketMap));
+        ws.on('message',(data)=> this.handleMessage(data,userId,sessionId));
         ws.on('close',(data) =>this.handleClose(ws,userId))
 
     }
@@ -67,8 +130,10 @@ export class SocketServer{
         ws.close();
     }
 
-    private handleMessage = (data: any,userId:string,socketMap:Map<string,any>) =>{   //Websocket.Rawdata giving error 
+    private handleMessage = (data: any,userId:string,sessionId:string)=>{   //Websocket.Rawdata giving error 
     let parsedData;
+    const session = this.sessions.get(sessionId);
+    if(!session)return
 
     try {
         
@@ -98,16 +163,16 @@ export class SocketServer{
                 handleLeaveRoom(userId,parsedData)
                 break;
             case 'chat':
-                handleChat(userId,socketMap,parsedData)
+                handleChat(userId,this.sessions,this.userSessions,parsedData,sessionId)
                 break;
             case 'mouseMovement':
-                handleMouseMovement(userId,socketMap,parsedData)
+                handleMouseMovement(userId,this.sessions,this.userSessions,parsedData,sessionId)
                 break;
             case 'shapeUpdate':
-                handleShapeUpdate(userId,socketMap,parsedData)
+                handleShapeUpdate(userId,this.sessions,this.userSessions,parsedData,sessionId)
                 break;
             case 'shapePreview':
-                handleShapePreview(userId,socketMap,parsedData)
+                handleShapePreview(userId,this.sessions,this.userSessions,parsedData,sessionId)
                 break;
         
             default:
