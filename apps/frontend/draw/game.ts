@@ -11,6 +11,7 @@ import { Rect } from "./shapes/Rect";
 import { Ellipse } from "./shapes/Ellipse";
 import { Line } from "./shapes/Line";
 import { Pencil } from "./shapes/Pencil";
+import { Diamond } from "./shapes/Diamond";
 interface SelectionState {
   selectedShape: BaseShape | null,
   isDraggin: boolean,
@@ -342,7 +343,7 @@ export class Game {
       console.log('is outside the bounding box')
       this.selectionState.selectedShape = null
       this.selectionState.isDraggin = false;  
-      this.selectionState.resizeHanle = resizeHandle;
+      this.selectionState.resizeHanle = null;
       this.selectionState.dragStartX = 0;
       this.selectionState.dragStartY = 0;
 
@@ -451,6 +452,21 @@ export class Game {
         inputShape = this.existingShapes[this.existingShapes.length - 1]  //last shape as Shape
       break;
 
+      case "diamond":
+        const widthh = canvasCoords.x - this.startX
+        const heighth = canvasCoords.y - this.startY
+        inputShape = new Diamond(
+          this.startX,
+          this.startY,
+          Math.abs(widthh / 2),
+          Math.abs(heighth / 2),
+          this.selectedColor,
+          this.strokeWidth
+
+
+        )
+        break;
+
     }
     if (inputShape) {
       this.existingShapes.push(inputShape);
@@ -514,9 +530,10 @@ export class Game {
     }
   };
 
-  checkIfHandleAtPoint = (x:number,y:number) =>{
-    const handlesize = this.Handle_size / this.scale
-
+  checkIfHandleAtPoint = (x: number, y: number) => {
+    if (!this.selectionState.selectedShape) return null;
+    
+    const handlesize = this.Handle_size / this.scale;
     const {bounds} = this.getBoundingBox(this.selectionState.selectedShape);
     const handles =this.getResizeHandlers(bounds)
     for( let handle of handles)
@@ -639,6 +656,19 @@ export class Game {
           sendShapePreview(this.socket, currentShape.serialize(), this.roomId, 'new', this.sessionId!);
         }
         break;
+      case "diamond":
+        const diamondWidth = canvasCoords.x - this.startX;
+        const diamondHeight  = canvasCoords.y - this.startY;
+        previewShape = {
+          type: 'diamond',
+          centerX: this.startX + diamondWidth /2 ,
+          centerY: this.startY + diamondHeight /2 ,
+          radiusX: Math.abs(diamondWidth / 2),
+          radiusY: Math.abs(diamondHeight / 2),
+          color: this.selectedColor,
+          lineWidth: this.strokeWidth
+        };
+        break;  
 
       case "panTool":
         // this.startX  //initial point which we have to maintain with the canvavs by changin the offset so that the point with resp to canvas remains same
@@ -788,7 +818,10 @@ export class Game {
       case 'pencil':
         this.shapeRenderer.drawPencil(shape);
         break;
-
+      case 'diamond':
+        this.shapeRenderer.drawDiamond(shape);
+        break;
+        
       default:
         break
     }
@@ -827,6 +860,14 @@ export class Game {
         }
         break;
 
+      case 'diamond':
+        path.moveTo(shape.centerX, shape.centerY);
+        path.lineTo(shape.centerX + shape.radiusX, shape.centerY + shape.radiusY);
+        path.lineTo(shape.centerX, shape.centerY + 2 * shape.radiusY);
+        path.lineTo(shape.centerX - shape.radiusX, shape.centerY + shape.radiusY);
+        path.closePath();
+        break;
+
       default:
         break;
     }
@@ -838,3 +879,4 @@ export class Game {
 
   }
 }
+

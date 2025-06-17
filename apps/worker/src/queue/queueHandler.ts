@@ -72,6 +72,6 @@ export interface parsedMessage {
     roomId:string;
     shapeId:string;
     message:any;                                          //need to fix - error prisma.JsonValue not working 
-    shapeType: 'rect' | 'ellipse' | 'pencil' | 'text'
+    shapeType: 'rect' | 'ellipse' | 'pencil' | 'text' | 'diamond'
     
 }

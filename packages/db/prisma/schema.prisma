@@ -52,4 +52,6 @@ enum ShapeType {
   line
   pencil
   text
+  diamond
+  arrow
 }

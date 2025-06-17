@@ -1,6 +1,5 @@
 
-export type Shape = Rect | Ellipse | Line | Pencil | TextInput ;
-export type NormalizedShape = NormalizedRect | NormalizedEllipse | NormalizedLine | NormalizedPencil | NormalizedTextInput ;
+export type Shape = Rect | Ellipse | Line | Pencil | TextInput | Diamond ;
 
 interface baseShape {
     type: string;
@@ -41,8 +40,8 @@ export interface Line extends baseShape {
 export interface Pencil extends baseShape{
     type:"pencil",
     points:{x:number , y:number}[]
-
-
+    
+    
 }
 
 export interface TextInput extends baseShape {
@@ -55,30 +54,11 @@ export interface TextInput extends baseShape {
 }
 
 
-export interface NormalizedRect extends Rect{}
 
-export interface NormalizedEllipse extends baseShape {
-    type: "ellipse";
-    x: number;       // centerX  
-    y: number;       // centerY  
-    width: number;   // radiusX * 2
-    height: number;  // radiusY * 2
-}
-
-export interface NormalizedLine extends baseShape {
-    type: "line";
-    x: number;  // startX  
-    y: number;  // startY  
-    width: number;    // endX  =  startX+width
-    height: number;    // endY = startY + height  
-}
-
-export interface NormalizedPencil extends Pencil {}
-export interface NormalizedTextInput extends baseShape {
-    type: "text";
-    textContent: string; 
-    x: number;       // startX  
-    y: number;       // startY  
-    maxWidth: number; 
-    font?: number;
+export interface Diamond extends baseShape {
+    type: "diamond";
+    centerX: number;    
+    centerY: number;    
+    radiusX: number;    
+    radiusY: number;   
 }
