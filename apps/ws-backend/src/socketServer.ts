@@ -14,7 +14,6 @@ export interface ClientSession{
 export class SocketServer{
     private static instance: SocketServer;
     private wss:WebSocketServer;
-    public socketMap:Map<string,WebSocket> = new Map();
     private sessions: Map<string,ClientSession> = new Map();
     private userSessions: Map<string,Set<string>> = new Map();
 
@@ -121,12 +120,17 @@ export class SocketServer{
         
         ws.on('error', console.error);
         ws.on('message',(data)=> this.handleMessage(data,userId,sessionId));
-        ws.on('close',(data) =>this.handleClose(ws,userId))
+        ws.on('close',(data) =>this.handleClose(ws))
 
     }
 
-    private handleClose=(ws:WebSocket,userId:string)=>{
-        this.socketMap.delete(userId)
+    private handleClose=(ws:WebSocket)=>{
+
+        Object.entries(this.sessions).forEach(([sessionId , session])=>{
+            if(session.ws === ws){
+                this.cleanUpSession(sessionId)
+            }
+        })
         ws.close();
     }
 

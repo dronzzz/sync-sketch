@@ -8,6 +8,22 @@ export function useSocket(){
     const [sessionId, setSessionId] = useState<string | null>(null);
 
     useEffect(() => {
+       
+        const cleanup = () => {
+            if (socket) {
+                socket.close();
+                setSocket(null);
+                setSessionId(null);
+            }
+        };
+
+       
+        const handleBeforeUnload = () => {
+            cleanup();
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
         const ws = new WebSocket(WS_URL);
         
         ws.onopen = () => {
@@ -32,17 +48,17 @@ export function useSocket(){
 
         ws.onerror = (error) => {
             console.error('WebSocket error:', error);
+            cleanup();
         };
 
         ws.onclose = () => {
             console.log('WebSocket connection closed');
-            setSocket(null);
-            setLoading(true);
-            setSessionId(null);
+            cleanup();
         };
 
         return () => {
-            ws.close();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            cleanup();
         };
     }, []);
 
