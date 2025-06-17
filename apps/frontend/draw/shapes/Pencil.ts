@@ -35,7 +35,7 @@ export class Pencil extends BaseShape{
 
 
 
-    getBoundingBox(): { x: number; y: number; width: number; height: number; } {
+    getBounds(): { x: number; y: number; width: number; height: number; } {
         const xs = this.points.map(p => p.x);
         const ys = this.points.map(p => p.y);
 
@@ -45,10 +45,10 @@ export class Pencil extends BaseShape{
         const maxY = Math.max(...ys);
 
         return {
-            x: minX - 10,
-            y: minY - 10,
-            width: maxX - minX + 20,
-            height: maxY - minY + 20
+            x: minX,
+            y: minY,
+            width: maxX - minX ,
+            height: maxY - minY 
         };
     }
 
@@ -60,5 +60,9 @@ export class Pencil extends BaseShape{
             color:this.getColor(),
             lineWidth:this.getLineWidth()
         }
+    }
+
+    resize(x: number, y: number, width: number, height: number): void {
+        
     }
 }

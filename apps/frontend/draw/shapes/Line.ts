@@ -33,17 +33,17 @@ export class Line extends BaseShape{
         
     }
 
-    getBoundingBox(): { x: number; y: number; width: number; height: number; } {
+    getBounds(): { x: number; y: number; width: number; height: number; } {
         const minX = Math.min(this.startX, this.endX);
         const minY = Math.min(this.startY, this.endY);
         const maxX = Math.max(this.startX, this.endX);
         const maxY = Math.max(this.startY, this.endY);
         
         return {
-            x: minX - 10,
-            y: minY - 10,
-            width: maxX - minX + 20,
-            height: maxY - minY + 20
+            x: minX ,
+            y: minY ,
+            width: maxX - minX,
+            height: maxY - minY
         };
     }
 
@@ -58,5 +58,12 @@ export class Line extends BaseShape{
             color:this.getColor(),
             lineWidth:this.getLineWidth()
         }
+    }
+
+    resize(x: number, y: number, width: number, height: number): void {
+        this.startX = x;
+        this.startY = y;
+        this.endX = x + width;
+        this.endY = y + width;
     }
 }

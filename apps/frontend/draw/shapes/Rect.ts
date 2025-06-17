@@ -29,12 +29,12 @@ export class Rect extends BaseShape{
     }
 
 
-    getBoundingBox(): { x: number; y: number; width: number; height: number; } {
+    getBounds(): { x: number; y: number; width: number; height: number; } {
          return {
-            x: this.x - 10,
-            y: this.y - 10,
-            width: this.width + 20,
-            height: this.height + 20
+            x: this.x ,
+            y: this.y ,
+            width: this.width,
+            height: this.height
         };
     }
 
@@ -49,5 +49,12 @@ export class Rect extends BaseShape{
             lineWidth: this.getLineWidth(),
             id: this.getShapeId()
         };
+    }
+
+    resize(x: number, y: number, width: number, height: number): void {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
     }
 }

@@ -22,7 +22,8 @@ export abstract class BaseShape {
         return this.lineWidth;
     }
     abstract drag(dx: number, dy: number): void;
-    abstract getBoundingBox(): { x: number, y: number, width: number, height: number };
+    abstract getBounds(): { x: number, y: number, width: number, height: number };
     abstract draw(ctx: CanvasRenderingContext2D): void;
     abstract serialize() : Shape
+    abstract resize(x:number, y: number,width:number,height:number):void
 }

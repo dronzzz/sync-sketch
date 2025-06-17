@@ -15,7 +15,9 @@ interface SelectionState {
   selectedShape: BaseShape | null,
   isDraggin: boolean,
   dragStartX: number,
-  dragStartY: number
+  dragStartY: number,
+  isResizing:boolean,
+  resizeHanle: any | null,
 }
 
 const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string,sessionId:string) => {
@@ -65,12 +67,14 @@ export class Game {
   private existingPaths: { [key: string]: Path2D }
   private strokeWidth: number = 5;
   private isHovering: boolean = false; //true if pointer is hover over a shape
-  private Handle_size : number = 8;
+  private Handle_size : number = 10;
   private selectionState: SelectionState = {
     selectedShape: null,
     isDraggin: false,
     dragStartX: 0,
-    dragStartY: 0
+    dragStartY: 0,
+    isResizing:false,
+    resizeHanle:null,
   }
   private sessionId : string | null = null;
 
@@ -131,8 +135,8 @@ export class Game {
     this.socket.onmessage = async (event) => {
       try {
         const message = JSON.parse(event.data);
-        console.log('Raw incoming message:', event.data);
-        console.log('Parsed incoming message:', message);
+        // console.log('Raw incoming message:', event.data);
+        // console.log('Parsed incoming message:', message);
 
         if (message.type === "session-init") {
           console.log('Received session-init message:', message);
@@ -308,18 +312,27 @@ export class Game {
 
   getBoundingBox = (shape:BaseShape) => {
 
-    const{x, y, width, height} = shape.getBoundingBox()
+
+    const{x, y, width, height} = shape.getBounds()
+    const gap  = 10;
 
     const path = new Path2D;
-    path.rect(x, y, width, height);
+    path.rect(x - gap , y - gap, width + gap*2, height + gap*2);
     return {
       path,
-       bounds: { x, y, width, height }
+       bounds: { x:x-gap, y:y-gap, width:width+gap*2, height:height+gap*2 }
     };
   }
 
   handleShapeSelectionMouseDown = (x: number, y: number) => {
-    if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState.selectedShape).path, this.startX, this.startY)) {
+    const resizeHandle = this.checkIfHandleAtPoint(x,y);
+    if(this.selectionState.selectedShape && resizeHandle !== null ){
+      this.selectionState.isResizing = true;
+      this.selectionState.resizeHanle = resizeHandle;
+      this.selectionState.dragStartX = x;
+      this.selectionState.dragStartY = y;
+      console.log('inside the handleShapeSelectionMouseDown')
+    }else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, this.startX, this.startY)) {
       console.log('is inside the bounding box')
       this.selectionState.isDraggin = true;
       this.selectionState.dragStartX = x;
@@ -328,13 +341,15 @@ export class Game {
     } else {
       console.log('is outside the bounding box')
       this.selectionState.selectedShape = null
-      this.selectionState.isDraggin = false;
+      this.selectionState.isDraggin = false;  
+      this.selectionState.resizeHanle = resizeHandle;
       this.selectionState.dragStartX = 0;
       this.selectionState.dragStartY = 0;
 
       this.clearCanvas()
 
     }
+    
     if (this.isHovering && this.selectionState.selectedShape) {
       this.drawBoundingBox(this.selectionState.selectedShape)
 
@@ -377,8 +392,7 @@ export class Game {
     this.clicked = false;
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
 
-    if (this.selectionState.isDraggin) {
-      this.selectionState.isDraggin = false;
+    if (this.selectionState.isDraggin || this.selectionState.isResizing) {
       if (this.selectionState.selectedShape) {
         this.socket.send(JSON.stringify({
           type: "shapeUpdate",
@@ -386,6 +400,9 @@ export class Game {
           message: JSON.stringify(this.selectionState.selectedShape.serialize()),
           shapeId: this.selectionState.selectedShape.getShapeId()
         }));
+        this.selectionState.isDraggin = false;
+        this.selectionState.isResizing = false;
+        this.selectionState.resizeHanle  = null
       }
     }
 
@@ -456,6 +473,31 @@ export class Game {
     const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
     const { cursorType, setCursorType } = useCursorType.getState();
 
+    if(this.selectionState.selectedShape){
+      const handleType = this.checkIfHandleAtPoint(x,y);
+      if(handleType !== null){
+        // console.log('pointing ot hanle ',handleType)
+        let cursor = 'cursor-default';
+          switch (handleType) {
+            case 'top-left':
+            case 'bottom-right':
+              cursor = "cursor-nw-resize"
+              break;
+            case 'top-right':
+            case 'bottom-left':
+              cursor = "cursor-ne-resize"
+              break;
+          
+            default:
+              break;
+          }
+          if(cursorType !== cursor){
+            setCursorType(cursor)
+          }
+          return;
+      }
+    }
+
 
     this.isHovering = false;
     Object.entries(this.existingPaths).forEach(([id, path]) => {
@@ -471,6 +513,21 @@ export class Game {
       setCursorType(nextCursor);
     }
   };
+
+  checkIfHandleAtPoint = (x:number,y:number) =>{
+    const handlesize = this.Handle_size / this.scale
+
+    const {bounds} = this.getBoundingBox(this.selectionState.selectedShape);
+    const handles =this.getResizeHandlers(bounds)
+    for( let handle of handles)
+      if(x >= handle.x && x <= handle.x + handlesize && y >= handle.y && y <= handle.y + handlesize){
+        return handle.type;
+      }
+    return null;
+
+
+
+  }
 
   private handleShapeDrag = async (e: MouseEvent) => {
     if (!this.selectionState.selectedShape) return;
@@ -491,6 +548,42 @@ export class Game {
 
 
   }
+
+  handleShapeResize = (e:MouseEvent) =>{
+    const { x, y} = this.getUpdatedMouseCoords(e.clientX,e.clientY);
+    const dx = x - this.selectionState.dragStartX;
+    const dy = y - this.selectionState.dragStartY;
+
+    const bounds = this.selectionState.selectedShape?.getBounds()
+    if(!bounds) return
+    
+    switch(this.selectionState.resizeHanle){
+      case 'top-left':
+        this.selectionState.selectedShape?.resize(bounds.x+dx,bounds.y+dy,bounds.width - dx,bounds.height - dy)
+        break;
+        case 'top-right':
+          this.selectionState.selectedShape?.resize(bounds.x,bounds.y+dy,bounds.width + dx,bounds.height - dy)
+          break
+          case 'bottom-left':
+            this.selectionState.selectedShape?.resize(bounds.x+dx,bounds.y, bounds.width - dx,bounds.height + dy)
+            break;
+            case 'bottom-right':
+              this.selectionState.selectedShape?.resize(bounds.x,bounds.y, bounds.width + dx,bounds.height + dy)
+              break;
+              default:
+            break;
+            
+            
+          }
+          this.selectionState.dragStartX = x
+          this.selectionState.dragStartY = y
+
+    this.clearCanvas()
+
+
+  }
+
+
 
   handleDrawingOnMouseMove = (e: MouseEvent) => {
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
@@ -580,6 +673,9 @@ export class Game {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
     sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId,this.sessionId!)
+    if(this.selectedTool === "pointer" && this.selectionState.isResizing){
+      this.handleShapeResize(e)
+    }else
 
     if (this.selectedTool === "pointer" && this.selectionState.isDraggin) {
       this.handleShapeDrag(e)

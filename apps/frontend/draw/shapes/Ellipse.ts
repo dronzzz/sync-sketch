@@ -29,12 +29,12 @@ export class Ellipse extends BaseShape{
         this.centerY += dy;
     }
 
-    getBoundingBox(): { x: number; y: number; width: number; height: number; } {
+    getBounds(): { x: number; y: number; width: number; height: number; } {
           return {
-            x: this.centerX - this.radiusX - 10,
-            y: this.centerY - this.radiusY - 10,
-            width: this.radiusX * 2 + 20,
-            height: this.radiusY * 2 + 20
+            x: this.centerX - this.radiusX ,
+            y: this.centerY - this.radiusY ,
+            width: this.radiusX * 2,
+            height: this.radiusY * 2
         };
     }
     serialize(): Shape {
@@ -48,5 +48,12 @@ export class Ellipse extends BaseShape{
             color:this.getColor(),
             lineWidth:this.getLineWidth()
         }
+    }
+
+    resize(x: number, y: number, width: number, height: number): void {
+        this.centerX = x + (width / 2);
+        this.centerY = y + (height / 2);
+        this.radiusX = Math.abs(width) / 2;
+        this.radiusY = Math.abs(height) / 2;
     }
 }
