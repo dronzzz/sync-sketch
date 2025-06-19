@@ -12,6 +12,8 @@ import { Ellipse } from "./shapes/Ellipse";
 import { Line } from "./shapes/Line";
 import { Pencil } from "./shapes/Pencil";
 import { Diamond } from "./shapes/Diamond";
+import { Arrow } from "./shapes/Arrow";
+
 interface SelectionState {
   selectedShape: BaseShape | null,
   isDraggin: boolean,
@@ -467,6 +469,17 @@ export class Game {
         )
         break;
 
+      case "arrow":
+        inputShape = new Arrow(
+          this.startX,
+          this.startY,
+          canvasCoords.x,
+          canvasCoords.y,
+          this.selectedColor,
+          this.strokeWidth
+        );
+        break;
+
     }
     if (inputShape) {
       this.existingShapes.push(inputShape);
@@ -687,6 +700,18 @@ export class Game {
         // this.lastPanY = e.clientY;
 
         this.clearCanvas();
+        break;
+
+      case "arrow":
+        previewShape = {
+          type: "arrow",
+          startX: this.startX,
+          startY: this.startY,
+          endX: canvasCoords.x,
+          endY: canvasCoords.y,
+          color: this.selectedColor,
+          lineWidth: this.strokeWidth
+        };
         break;
     }
 

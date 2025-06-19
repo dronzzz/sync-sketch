@@ -1,5 +1,5 @@
 
-export type Shape = Rect | Ellipse | Line | Pencil | TextInput | Diamond ;
+export type Shape = Rect | Ellipse | Line | Pencil | TextInput | Diamond | Arrow;
 
 interface baseShape {
     type: string;
@@ -35,6 +35,15 @@ export interface Line extends baseShape {
     endX : number;
     endY : number;
 
+}
+
+export interface Arrow extends baseShape {
+
+    type: "arrow";
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
 }
 
 export interface Pencil extends baseShape{

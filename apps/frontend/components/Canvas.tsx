@@ -11,7 +11,7 @@ import MousePositionPointer from "./MousePositionPointer";
 import { useCursorType } from "@/store/useMouseStore";
 import { useSocket } from "@/hooks/useSocket";
 
-export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond";
+export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow";
 
 export default function Canvas({ roomId, socket, loading }: { roomId: string, socket: WebSocket | null, loading: boolean }) {
     const [selectedTool, setSelectedTool] = useState<Tool>('ellipse');
