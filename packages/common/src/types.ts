@@ -12,6 +12,7 @@ export const signInSchema = z.object({
 
 export const CreateRoomSchema = z.object({
     slug : z.string(),
+    shapes:z.any().array().optional()
 })
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;

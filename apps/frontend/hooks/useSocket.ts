@@ -2,30 +2,35 @@
 import { WS_URL } from "@/config";
 import { useEffect, useState } from "react";
 
-export function useSocket(){
+export function useSocket(roomId?: string) {
+    if (!roomId) return { loading: false, socket: null, sessionId: null }
+
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [sessionId, setSessionId] = useState<string | null>(null);
 
+
     useEffect(() => {
-       
+
         const cleanup = () => {
             if (socket) {
                 socket.close();
                 setSocket(null);
                 setSessionId(null);
+
             }
         };
 
-       
+
         const handleBeforeUnload = () => {
             cleanup();
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
 
+
         const ws = new WebSocket(WS_URL);
-        
+
         ws.onopen = () => {
             console.log('WebSocket connection established');
             setSocket(ws);
@@ -35,7 +40,7 @@ export function useSocket(){
             try {
                 const message = JSON.parse(event.data);
                 console.log('Socket message received:', message);
-                
+
                 if (message.type === "session-init") {
                     console.log('Session initialized with ID:', message.sessionId);
                     setSessionId(message.sessionId);
@@ -60,7 +65,7 @@ export function useSocket(){
             window.removeEventListener('beforeunload', handleBeforeUnload);
             cleanup();
         };
-    }, []);
+    }, [roomId]);
 
     return { loading, socket, sessionId };
 }

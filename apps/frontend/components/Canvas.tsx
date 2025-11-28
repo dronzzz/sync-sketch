@@ -10,24 +10,85 @@ import { useTheme } from "next-themes";
 import MousePositionPointer from "./MousePositionPointer";
 import { useCursorType } from "@/store/useMouseStore";
 import { useSocket } from "@/hooks/useSocket";
+import { ShareButton } from "./ShareButton";
+import { getAllShapes } from "@/lib/indexdb";
+import { ShareDialog } from "./ShareDialog";
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow";
 
-export default function Canvas({ roomId, socket, loading }: { roomId: string, socket: WebSocket | null, loading: boolean }) {
+export default function Canvas({ roomId, socket, loading }: { roomId?: string, socket: WebSocket | null, loading: boolean }) {
     const [selectedTool, setSelectedTool] = useState<Tool>('ellipse');
     const [selectedColor, setSelectedColor] = useState<Color>({ hex: "#3d3c3a" });
     const windowSize = useWindowSize();
     const [game, setGame] = useState<Game | null>(null);
     const { theme } = useTheme();
-    const cursorType = useCursorType((state)=> state.cursorType);
+    const cursorType = useCursorType((state) => state.cursorType);
     const { sessionId } = useSocket();
+    const isOnline = roomId ? true : false;
+    const [shareDialogOpen, setShareDialogOpen] = useState(false);
+
+
+    const handleShare = () => {
+        if (!game) {
+            alert('Canvas not initialized');
+            return;
+        }
+
+        setShareDialogOpen(true);
+    };
+
+    const handleConfirmShare = async () => {
+        if (!game) {
+            alert('Canvas not initialized');
+            return;
+        }
+
+
+        try {
+
+            const shapes = await getAllShapes(game.getDBPromise());
+
+
+
+
+            const resp = await fetch('/api/share', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ shapes })
+            });
+
+            if (!resp.ok) {
+                throw new Error('Failed to create room');
+            }
+
+            const data = await resp.json();
+            const newRoomId = data.roomId;
+
+            if (!newRoomId) {
+                throw new Error('No room ID received');
+            }
+
+
+
+
+            window.location.href = `/canvas/${newRoomId}`;
+
+        } catch (error) {
+            console.error('Share error:', error);
+            alert('Failed to share canvas. Please try again.');
+            setShareDialogOpen(false);
+        }
+    };
+
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    useEffect(()=>{
-        if(game){
+    useEffect(() => {
+        if (game) {
             game.clearCanvas()
         }
-    },[windowSize])
+    }, [windowSize])
 
     useEffect(() => {
         game?.setTool(selectedTool);
@@ -55,6 +116,13 @@ export default function Canvas({ roomId, socket, loading }: { roomId: string, so
             return () => {
                 g?.destroy();
             };
+        } else {
+            const g = new Game(canvasRef.current);
+            setGame(g);
+            return () => {
+                g?.destroy();
+            };
+
         }
     }, [canvasRef, socket, sessionId]);
 
@@ -62,29 +130,38 @@ export default function Canvas({ roomId, socket, loading }: { roomId: string, so
         <div className="relative w-full h-screen overflow-hidden">
             <canvas ref={canvasRef} height={windowSize.height} width={windowSize.width} className={`bg-white dark:bg-[#0d0c09] touch-none ${cursorType}`}
             />
-            
+
             <ToolBar
                 setSelectedTool={setSelectedTool}
                 selectedTool={selectedTool}
                 selectedColor={selectedColor}
                 setSelectedColor={setSelectedColor}
             />
-            
+
             <ToggleTheme />
-            <MousePositionPointer/>
-            
+            {!isOnline && <ShareButton onClick={handleShare} />}
+            <MousePositionPointer />
+
+
 
             {loading && (() => {
-           
-            return (
-                <div className="fixed inset-0 flex justify-center items-center text-black dark:text-white z-10 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
-                    <div className="text-center">
-                        <div className="text-lg md:text-xl text-black dark:text-white">Connecting...</div>
-                        <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please wait</div>
+
+                return (
+                    <div className="fixed inset-0 flex justify-center items-center text-black dark:text-white z-10 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
+                        <div className="text-center">
+                            <div className="text-lg md:text-xl text-black dark:text-white">Connecting...</div>
+                            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please wait</div>
+                        </div>
                     </div>
-                </div>
-            );
-        })()}
+                );
+            })()}
+
+            {shareDialogOpen && (
+                <ShareDialog
+                    onConfirm={handleConfirmShare}
+                    onClose={() => setShareDialogOpen(false)}
+                />
+            )}
         </div>
     );
 }

@@ -29,21 +29,22 @@ model Room {
   id String @id @default(uuid())
   slug String @unique
   createdAt DateTime @default(now())
-  adminId String
-  admin User @relation(fields: [adminId], references: [id])
+  adminId String?
+  admin User? @relation(fields: [adminId], references: [id])
   chat Chat[]
 }
 model Chat {
   id Int @id @default(autoincrement())
   roomId String
-  userId String
+  userId String?
   data Json       //need to change --add diff coordinates
-  shapeId String @unique
+  shapeId String
   type ShapeType  
   createdAt DateTime @default(now())
   room Room @relation(fields: [roomId], references: [id])
-  user User @relation(fields: [userId],references: [id])
+  user User? @relation(fields: [userId],references: [id])
   
+  @@unique([roomId, shapeId])
 }
 
 enum ShapeType {

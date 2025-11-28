@@ -13,24 +13,25 @@ import { Line } from "./shapes/Line";
 import { Pencil } from "./shapes/Pencil";
 import { Diamond } from "./shapes/Diamond";
 import { Arrow } from "./shapes/Arrow";
+import { getAllShapes, initDB, saveShape, SketchDB } from "@/lib/indexdb";
+import { IDBPDatabase } from 'idb';
 
 interface SelectionState {
   selectedShape: BaseShape | null,
   isDraggin: boolean,
   dragStartX: number,
   dragStartY: number,
-  isResizing:boolean,
+  isResizing: boolean,
   resizeHanle: any | null,
 }
 
-const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string,sessionId:string) => {
+const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string, sessionId: string) => {
   socket.send(JSON.stringify({
     type: "mouseMovement",
     x,
     y,
     roomId,
     sessionId,
-
   }))
 }, 100)
 
@@ -53,11 +54,11 @@ export class Game {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D
   private existingShapes: BaseShape[];
-  private roomId: string;
+  private roomId: string | null;
   private clicked: boolean;
   private startX: number = 0;
   private startY: number = 0;
-  private socket: WebSocket;
+  private socket: WebSocket | null;
   private selectedTool: Tool = "panTool";
   private shapeRenderer: ShapeRenderer;
   private textRenderer: TextRenderer;
@@ -70,16 +71,18 @@ export class Game {
   private existingPaths: { [key: string]: Path2D }
   private strokeWidth: number = 5;
   private isHovering: boolean = false; //true if pointer is hover over a shape
-  private Handle_size : number = 10;
+  private Handle_size: number = 8;
   private selectionState: SelectionState = {
     selectedShape: null,
     isDraggin: false,
     dragStartX: 0,
     dragStartY: 0,
-    isResizing:false,
-    resizeHanle:null,
+    isResizing: false,
+    resizeHanle: null,
   }
-  private sessionId : string | null = null;
+  private sessionId: string | null = null;
+  private isOnline: boolean = false;
+  private dbPromise: any | null = null;
 
   setSessionId(id: string) {
     this.sessionId = id;
@@ -102,18 +105,37 @@ export class Game {
     this.initHandlers();
     this.mouseHandlers();
     this.clearCanvas();
+
   }
 
 
   async init() {
     this.ctx.fillStyle = this.currentTheme
     this.ctx.strokeStyle = this.selectedColor
-    const shapes = await getExistingShapes(this.roomId);
-    this.existingShapes =  this.existingShapes = shapes.map(shapeData=> 
-            ShapeFactory.createShapeFromData(shapeData)
-        );
+    this.isOnline = !!(this.socket && this.roomId);
+    this.dbPromise = await initDB()
+
+    if (!this.isOnline) {
+
+      const shapes = await getAllShapes(this.dbPromise);   //from local indexdb
+
+      this.existingShapes = shapes.map((shapeData: Shape) =>
+        ShapeFactory.createShapeFromData(shapeData)
+      );
+
+    } else {
+      const shapes = await getExistingShapes(this.roomId!);
+      this.existingShapes = shapes.map((shapeData: Shape) =>
+        ShapeFactory.createShapeFromData(shapeData)
+      );
+    }
     this.clearCanvas();
   }
+
+  getDBPromise(): IDBPDatabase<SketchDB> {
+    return this.dbPromise;
+  }
+
 
   setTool(tool: Tool) {
     this.selectedTool = tool;
@@ -134,65 +156,69 @@ export class Game {
 
   initHandlers() {
     console.log('Initializing WebSocket handlers');
-    
-    this.socket.onmessage = async (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        // console.log('Raw incoming message:', event.data);
-        // console.log('Parsed incoming message:', message);
+    if (this.isOnline && this.socket) {
 
-        if (message.type === "session-init") {
-          console.log('Received session-init message:', message);
-          this.sessionId = message.sessionId;
-          console.log('Session ID set to:', this.sessionId);
-          return;
-        }
 
-        if (message.type === "chat") {
-          const shapeData = JSON.parse(message.message)
-          const shape = ShapeFactory.createShapeFromData(shapeData)
-          this.existingShapes.push(shape);
-          this.clearCanvas();
-        }
-        if (message.type === "mouseMovement") {
-          const { setMousePosition } = useMouseStore.getState();
-          const screenX = message.x * this.scale + this.panX;  //world coord --> screen coord
-          const screenY = message.y * this.scale + this.panY;
-          setMousePosition(message.userId, screenX, screenY);
-        }
+      this.socket.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('Raw incoming message:', event.data);
+          console.log('Parsed incoming message:', message);
 
-        if (message.type === 'shapeUpdate') {
-          const updatedShape = JSON.parse(message.message);
-          const shape = ShapeFactory.createShapeFromData(updatedShape)
-          
-
-          const i = this.existingShapes.findIndex(shape => shape.getShapeId() === updatedShape.id);
-
-          if (i !== -1) {
-            this.existingShapes[i] = shape
-          } else {
-            this.existingShapes.push(shape)
-
+          if (message.type === "session-init") {
+            console.log('Received session-init message:', message);
+            this.sessionId = message.sessionId;
+            console.log('Session ID set to:', this.sessionId);
+            return;
           }
-          this.clearCanvas();
-        } else if (message.type === 'shapePreview') {
-          const previewShape = JSON.parse(message.message);
-          
-         
-          if (message.previewType === 'modification') {
-            this.existingShapes = this.existingShapes.filter(
-              shape => shape.getShapeId() !== previewShape.id
-            );
+
+          if (message.type === "chat") {
+            const shapeData = JSON.parse(message.message)
+            const shape = ShapeFactory.createShapeFromData(shapeData)
+            this.existingShapes.push(shape);
+            this.clearCanvas();
           }
-          
-          this.clearCanvas();
-          this.drawAllShapes(previewShape);
+          if (message.type === "mouseMovement") {
+            const { setMousePosition } = useMouseStore.getState();
+            const screenX = message.x * this.scale + this.panX;  //world coord --> screen coord
+            const screenY = message.y * this.scale + this.panY;
+            setMousePosition(message.userId, screenX, screenY);
+          }
+
+          if (message.type === 'shapeUpdate') {
+            const updatedShape = JSON.parse(message.message);
+            const shape = ShapeFactory.createShapeFromData(updatedShape)
+
+
+            const i = this.existingShapes.findIndex(shape => shape.getShapeId() === updatedShape.id);
+
+            if (i !== -1) {
+              this.existingShapes[i] = shape
+            } else {
+              this.existingShapes.push(shape)
+
+            }
+            this.clearCanvas();
+          } else if (message.type === 'shapePreview') {
+            const previewShape = JSON.parse(message.message);
+
+
+            if (message.previewType === 'modification') {
+              this.existingShapes = this.existingShapes.filter(
+                shape => shape.getShapeId() !== previewShape.id
+              );
+            }
+
+            this.clearCanvas();
+            this.drawAllShapes(previewShape);
+          }
+        } catch (error) {
+          console.error('Error handling WebSocket message:', error);
         }
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
-      }
-    };
+      };
+    }
   }
+
 
   mouseHandlers() {
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
@@ -274,38 +300,38 @@ export class Game {
     }
   }
 
-  getResizeHandlers = (bounds:{
-    x:number;
-    y:number;
-    width:number;
-    height:number;
-  })=>{
+  getResizeHandlers = (bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => {
 
     const handleSize = this.Handle_size / this.scale;
-    const halfHandle = handleSize/2
+    const halfHandle = handleSize / 2
 
     const handles = [
-    {
-      type: "top-left",
-      x: bounds.x - halfHandle,
-      y: bounds.y - halfHandle,
-    },
-    {
-      type: "top-right",
-      x: bounds.x + bounds.width - halfHandle,
-      y: bounds.y - halfHandle,
-    },
-    {
-      type: "bottom-left",
-      x: bounds.x - halfHandle,
-      y: bounds.y + bounds.height - halfHandle,
-    },
-    {
-      type: "bottom-right",
-      x: bounds.x + bounds.width - halfHandle,
-      y: bounds.y + bounds.height - halfHandle,
-    },
-  ];
+      {
+        type: "top-left",
+        x: bounds.x - halfHandle,
+        y: bounds.y - halfHandle,
+      },
+      {
+        type: "top-right",
+        x: bounds.x + bounds.width - halfHandle,
+        y: bounds.y - halfHandle,
+      },
+      {
+        type: "bottom-left",
+        x: bounds.x - halfHandle,
+        y: bounds.y + bounds.height - halfHandle,
+      },
+      {
+        type: "bottom-right",
+        x: bounds.x + bounds.width - halfHandle,
+        y: bounds.y + bounds.height - halfHandle,
+      },
+    ];
 
     return handles
 
@@ -313,29 +339,29 @@ export class Game {
 
 
 
-  getBoundingBox = (shape:BaseShape) => {
+  getBoundingBox = (shape: BaseShape) => {
 
 
-    const{x, y, width, height} = shape.getBounds()
-    const gap  = 10;
+    const { x, y, width, height } = shape.getBounds()
+    const gap = 10;
 
     const path = new Path2D;
-    path.rect(x - gap , y - gap, width + gap*2, height + gap*2);
+    path.rect(x - gap, y - gap, width + gap * 2, height + gap * 2);
     return {
       path,
-       bounds: { x:x-gap, y:y-gap, width:width+gap*2, height:height+gap*2 }
+      bounds: { x: x - gap, y: y - gap, width: width + gap * 2, height: height + gap * 2 }
     };
   }
 
   handleShapeSelectionMouseDown = (x: number, y: number) => {
-    const resizeHandle = this.checkIfHandleAtPoint(x,y);
-    if(this.selectionState.selectedShape && resizeHandle !== null ){
+    const resizeHandle = this.checkIfHandleAtPoint(x, y);
+    if (this.selectionState.selectedShape && resizeHandle !== null) {
       this.selectionState.isResizing = true;
       this.selectionState.resizeHanle = resizeHandle;
       this.selectionState.dragStartX = x;
       this.selectionState.dragStartY = y;
       console.log('inside the handleShapeSelectionMouseDown')
-    }else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, this.startX, this.startY)) {
+    } else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, x, y)) {
       console.log('is inside the bounding box')
       this.selectionState.isDraggin = true;
       this.selectionState.dragStartX = x;
@@ -344,7 +370,7 @@ export class Game {
     } else {
       console.log('is outside the bounding box')
       this.selectionState.selectedShape = null
-      this.selectionState.isDraggin = false;  
+      this.selectionState.isDraggin = false;
       this.selectionState.resizeHanle = null;
       this.selectionState.dragStartX = 0;
       this.selectionState.dragStartY = 0;
@@ -352,7 +378,7 @@ export class Game {
       this.clearCanvas()
 
     }
-    
+
     if (this.isHovering && this.selectionState.selectedShape) {
       this.drawBoundingBox(this.selectionState.selectedShape)
 
@@ -379,7 +405,7 @@ export class Game {
     }
 
 
-    
+
 
 
     if (this.selectedTool === "text" && this.clicked === true) {
@@ -391,26 +417,45 @@ export class Game {
 
   };
 
-  handleMouseUp = (e: MouseEvent) => {
+  private updateStore = async (shapeData: BaseShape, opt: 'shapeUpdate' | 'chat') => {
+    const serialized = shapeData.serialize();
+    await saveShape(this.dbPromise, serialized)
+
+    if (this.isOnline && this.socket) {
+
+      this.socket.send(JSON.stringify({
+        type: "shapeUpdate",
+        roomId: this.roomId,
+        message: JSON.stringify(shapeData.serialize()),
+        shapeId: shapeData.getShapeId(),
+        sessionId: this.sessionId,
+        shapeType: shapeData.constructor.name.toLowerCase(),
+
+
+
+      }));
+    }
+
+
+
+  }
+
+  handleMouseUp = async (e: MouseEvent) => {
     this.clicked = false;
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
 
     if (this.selectionState.isDraggin || this.selectionState.isResizing) {
       if (this.selectionState.selectedShape) {
-        this.socket.send(JSON.stringify({
-          type: "shapeUpdate",
-          roomId: this.roomId,
-          message: JSON.stringify(this.selectionState.selectedShape.serialize()),
-          shapeId: this.selectionState.selectedShape.getShapeId()
-        }));
-        this.selectionState.isDraggin = false;
-        this.selectionState.isResizing = false;
-        this.selectionState.resizeHanle  = null
+        await this.updateStore(this.selectionState.selectedShape, 'shapeUpdate');
       }
+      this.selectionState.isDraggin = false;
+      this.selectionState.isResizing = false;
+      this.selectionState.resizeHanle = null
     }
 
+
     let inputShape: BaseShape | null = null;
-    
+
     switch (this.selectedTool) {
       case "rect":
         inputShape = new Rect(
@@ -435,7 +480,7 @@ export class Game {
           this.strokeWidth
         );
         break;
-        
+
 
       case "line":
         inputShape = new Line(
@@ -452,7 +497,7 @@ export class Game {
 
       case "pencil":
         inputShape = this.existingShapes[this.existingShapes.length - 1]  //last shape as Shape
-      break;
+        break;
 
       case "diamond":
         const widthh = canvasCoords.x - this.startX
@@ -483,14 +528,7 @@ export class Game {
     }
     if (inputShape) {
       this.existingShapes.push(inputShape);
-      this.socket.send(JSON.stringify({
-        type: "chat",
-        roomId: this.roomId,
-        message: JSON.stringify(inputShape.serialize()),
-        shapeId: inputShape.getShapeId(),
-        shapeType: inputShape.constructor.name.toLowerCase(),
-        sessionId: this.sessionId
-      }));
+      this.updateStore(inputShape, 'chat')
       this.clearCanvas();
     }
   };
@@ -502,30 +540,31 @@ export class Game {
     const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
     const { cursorType, setCursorType } = useCursorType.getState();
 
-    if(this.selectionState.selectedShape){
-      const handleType = this.checkIfHandleAtPoint(x,y);
-      if(handleType !== null){
+    if (this.selectionState.selectedShape) {
+      const handleType = this.checkIfHandleAtPoint(x, y);
+      if (handleType !== null) {
         // console.log('pointing ot hanle ',handleType)
         let cursor = 'cursor-default';
-          switch (handleType) {
-            case 'top-left':
-            case 'bottom-right':
-              cursor = "cursor-nw-resize"
-              break;
-            case 'top-right':
-            case 'bottom-left':
-              cursor = "cursor-ne-resize"
-              break;
-          
-            default:
-              break;
-          }
-          if(cursorType !== cursor){
-            setCursorType(cursor)
-          }
-          return;
+        switch (handleType) {
+          case 'top-left':
+          case 'bottom-right':
+            cursor = "cursor-nw-resize"
+            break;
+          case 'top-right':
+          case 'bottom-left':
+            cursor = "cursor-ne-resize"
+            break;
+
+          default:
+            break;
+        }
+        if (cursorType !== cursor) {
+          setCursorType(cursor)
+        }
+        return;
       }
     }
+
 
 
     this.isHovering = false;
@@ -545,12 +584,12 @@ export class Game {
 
   checkIfHandleAtPoint = (x: number, y: number) => {
     if (!this.selectionState.selectedShape) return null;
-    
+
     const handlesize = this.Handle_size / this.scale;
-    const {bounds} = this.getBoundingBox(this.selectionState.selectedShape);
-    const handles =this.getResizeHandlers(bounds)
-    for( let handle of handles)
-      if(x >= handle.x && x <= handle.x + handlesize && y >= handle.y && y <= handle.y + handlesize){
+    const { bounds } = this.getBoundingBox(this.selectionState.selectedShape);
+    const handles = this.getResizeHandlers(bounds)
+    for (let handle of handles)
+      if (x >= handle.x && x <= handle.x + handlesize && y >= handle.y && y <= handle.y + handlesize) {
         return handle.type;
       }
     return null;
@@ -561,64 +600,63 @@ export class Game {
 
   private handleShapeDrag = async (e: MouseEvent) => {
     if (!this.selectionState.selectedShape) return;
-    
+
     const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
     const dx = x - this.selectionState.dragStartX;
     const dy = y - this.selectionState.dragStartY;
 
-    this.selectionState.selectedShape?.drag(dx,dy)
+    this.selectionState.selectedShape?.drag(dx, dy)
 
     this.selectionState.dragStartX = x
     this.selectionState.dragStartY = y
-    
 
-      sendShapePreview(this.socket, this.selectionState.selectedShape?.serialize(), this.roomId, 'modification',this.sessionId!)
-    
+    if (this.isOnline && this.socket && this.roomId) {
+
+      sendShapePreview(this.socket, this.selectionState.selectedShape?.serialize(), this.roomId, 'modification', this.sessionId!)
+    }
     this.clearCanvas()
 
 
   }
 
-  handleShapeResize = (e:MouseEvent) =>{
-    const { x, y} = this.getUpdatedMouseCoords(e.clientX,e.clientY);
+  handleShapeResize = (e: MouseEvent) => {
+    const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY);
     const dx = x - this.selectionState.dragStartX;
     const dy = y - this.selectionState.dragStartY;
 
     const bounds = this.selectionState.selectedShape?.getBounds()
-    if(!bounds) return
-    
-    switch(this.selectionState.resizeHanle){
+    if (!bounds) return
+
+    switch (this.selectionState.resizeHandle) {
       case 'top-left':
-        this.selectionState.selectedShape?.resize(bounds.x+dx,bounds.y+dy,bounds.width - dx,bounds.height - dy)
+        this.selectionState.selectedShape?.resize(bounds.x + dx, bounds.y + dy, bounds.width - dx, bounds.height - dy)
         break;
-        case 'top-right':
-          this.selectionState.selectedShape?.resize(bounds.x,bounds.y+dy,bounds.width + dx,bounds.height - dy)
-          break
-          case 'bottom-left':
-            this.selectionState.selectedShape?.resize(bounds.x+dx,bounds.y, bounds.width - dx,bounds.height + dy)
-            break;
-            case 'bottom-right':
-              this.selectionState.selectedShape?.resize(bounds.x,bounds.y, bounds.width + dx,bounds.height + dy)
-              break;
-              default:
-            break;
-            
-            
-          }
-          this.selectionState.dragStartX = x
-          this.selectionState.dragStartY = y
+      case 'top-right':
+        this.selectionState.selectedShape?.resize(bounds.x, bounds.y + dy, bounds.width + dx, bounds.height - dy)
+        break
+      case 'bottom-left':
+        this.selectionState.selectedShape?.resize(bounds.x + dx, bounds.y, bounds.width - dx, bounds.height + dy)
+        break;
+      case 'bottom-right':
+        this.selectionState.selectedShape?.resize(bounds.x, bounds.y, bounds.width + dx, bounds.height + dy)
+        break;
+      default:
+        break;
+
+
+    }
+    this.selectionState.dragStartX = x
+    this.selectionState.dragStartY = y
 
     this.clearCanvas()
 
 
   }
 
-
-
   handleDrawingOnMouseMove = (e: MouseEvent) => {
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
     let previewShape: Shape | null = null;
-    
+
     switch (this.selectedTool) {
       case "rect":
         const rectHeight = canvasCoords.y - this.startY;
@@ -662,26 +700,30 @@ export class Game {
 
       case "pencil":
         const currentShape = this.existingShapes[this.existingShapes.length - 1];
-        if (currentShape instanceof Pencil) {                                     
+        if (currentShape instanceof Pencil) {
           currentShape.addPoint(canvasCoords.x, canvasCoords.y);
           this.clearCanvas();
           currentShape.draw(this.ctx);
-          sendShapePreview(this.socket, currentShape.serialize(), this.roomId, 'new', this.sessionId!);
+          if (this.isOnline && this.socket && this.roomId) {
+
+            sendShapePreview(this.socket, currentShape.serialize(), this.roomId, 'new', this.sessionId!);
+          }
         }
         break;
+
       case "diamond":
         const diamondWidth = canvasCoords.x - this.startX;
-        const diamondHeight  = canvasCoords.y - this.startY;
+        const diamondHeight = canvasCoords.y - this.startY;
         previewShape = {
           type: 'diamond',
-          centerX: this.startX + diamondWidth /2 ,
-          centerY: this.startY + diamondHeight /2 ,
+          centerX: this.startX + diamondWidth / 2,
+          centerY: this.startY + diamondHeight / 2,
           radiusX: Math.abs(diamondWidth / 2),
           radiusY: Math.abs(diamondHeight / 2),
           color: this.selectedColor,
           lineWidth: this.strokeWidth
         };
-        break;  
+        break;
 
       case "panTool":
         // this.startX  //initial point which we have to maintain with the canvavs by changin the offset so that the point with resp to canvas remains same
@@ -701,24 +743,15 @@ export class Game {
 
         this.clearCanvas();
         break;
-
-      case "arrow":
-        previewShape = {
-          type: "arrow",
-          startX: this.startX,
-          startY: this.startY,
-          endX: canvasCoords.x,
-          endY: canvasCoords.y,
-          color: this.selectedColor,
-          lineWidth: this.strokeWidth
-        };
-        break;
     }
 
     if (previewShape) {
       this.clearCanvas();
       this.drawAllShapes(previewShape);
-      sendShapePreview(this.socket, previewShape, this.roomId, 'new', this.sessionId!);
+      if (this.isOnline && this.socket && this.roomId) {
+
+        sendShapePreview(this.socket, previewShape, this.roomId, 'new', this.sessionId!);
+      }
     }
   }
 
@@ -727,12 +760,13 @@ export class Game {
   handleMouseMove = async (e: MouseEvent) => {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
-    sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId,this.sessionId!)
-    if(this.selectedTool === "pointer" && this.selectionState.isResizing){
-      this.handleShapeResize(e)
-    }else
+    if (this.isOnline && this.socket && this.roomId) {
 
-    if (this.selectedTool === "pointer" && this.selectionState.isDraggin) {
+      sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId, this.sessionId!)
+    }
+    if (this.selectedTool === "pointer" && this.selectionState.isResizing) {
+      this.handleShapeResize(e)
+    } else if (this.selectedTool === "pointer" && this.selectionState.isDraggin) {
       this.handleShapeDrag(e)
     } else if (this.selectedTool === "pointer") {
       this.mouseHoverDetection(e)
@@ -793,33 +827,33 @@ export class Game {
   drawBoundingBox = (shape: any) => {
     const handleSize = this.Handle_size / this.scale
     this.ctx.save()
-    const {path,bounds} = this.getBoundingBox(shape);
+    const { path, bounds } = this.getBoundingBox(shape);
     this.ctx.lineWidth = 1 / this.scale;
     this.ctx.strokeStyle = '#302c94';
     this.ctx.stroke(path);
 
     this.ctx.restore();
-    
+
     this.ctx.save();
-    if(this.currentTheme === "#0d0c09"){
+    if (this.currentTheme === "#0d0c09") {
 
       this.ctx.fillStyle = '#0d0c09';
-    }else{
+    } else {
       this.ctx.fillStyle = '#ffffff';
 
     }
-    this.ctx.lineWidth = 1/ this.scale;
+    this.ctx.lineWidth = 1 / this.scale;
     this.ctx.strokeStyle = '#302c94';
 
 
-  
+
     const handlers = this.getResizeHandlers(bounds)
-    handlers.forEach(handle =>{
+    handlers.forEach(handle => {
       this.ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
       this.ctx.strokeRect(handle.x, handle.y, handleSize, handleSize);
-      
+
     })
-    
+
     this.ctx.restore();
 
   }
@@ -843,10 +877,11 @@ export class Game {
       case 'pencil':
         this.shapeRenderer.drawPencil(shape);
         break;
+
       case 'diamond':
         this.shapeRenderer.drawDiamond(shape);
         break;
-        
+
       default:
         break
     }
@@ -859,7 +894,7 @@ export class Game {
   updateShapePath = (unSerializedShape: BaseShape) => {
     const shape = unSerializedShape.serialize()
     const path = new Path2D;
-    
+
 
     switch (shape.type) {
       case 'rect':
@@ -884,7 +919,6 @@ export class Game {
           }
         }
         break;
-
       case 'diamond':
         path.moveTo(shape.centerX, shape.centerY);
         path.lineTo(shape.centerX + shape.radiusX, shape.centerY + shape.radiusY);
@@ -904,4 +938,3 @@ export class Game {
 
   }
 }
-

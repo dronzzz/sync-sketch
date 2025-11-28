@@ -3,19 +3,21 @@ import React from 'react'
 import Canvas from './Canvas'
 import { useSocket } from '@/hooks/useSocket';
 
-export default function CanvasClient({ roomId }: { roomId: string }) {
-    const { loading, socket } = useSocket();
-    
-    if (socket && !loading) {
+export default function CanvasClient({ roomId }: { roomId?: string }) {
+   
+    const { loading, socket } = useSocket(roomId);
+
+    if (socket && !loading && roomId) {
         socket.send(JSON.stringify({
             type: "join_room",
             roomId,
         }))
     }
     // if (!socket) {
-    //     return null
-    // }
-  
+        //     return null
+        // }
+    
+
 
 
     return (
