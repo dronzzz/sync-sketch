@@ -14,7 +14,7 @@ import { getAllShapes } from "@/lib/indexdb";
 import { ShareDialog } from "./ShareDialog";
 
 
-export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow";
+export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow" | "eraser";
 
 export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }: { roomId?: string, setRoomId: (Id: string | undefined) => void, socket: WebSocket | null, loading: boolean, sessionId: string | null }) {
     const [selectedTool, setSelectedTool] = useState<Tool>('pointer');
@@ -52,7 +52,8 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         }
 
         try {
-            const shapes = await getAllShapes(game.getDBPromise());
+            const shapes = await game?.getAllShapesFromGameState();
+            // const shapes = await getAllShapes(game.getDBPromise());
             const resp = await fetch('/api/share', {
                 method: 'POST',
                 headers: {

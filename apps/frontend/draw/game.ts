@@ -83,6 +83,7 @@ export class Game {
   private sessionId: string | null = null;
   private isOnline: boolean = false;
   private dbPromise: any | null = null;
+  private shapesToDelete: Set<string> = new Set();
 
   setSessionId(id: string) {
     this.sessionId = id;
@@ -159,6 +160,10 @@ export class Game {
     this.ctx.fillStyle = this.currentTheme;
     this.clearCanvas()
 
+  }
+
+  getAllShapesFromGameState = async () => {
+    return this.existingShapes
   }
 
   overWriteExistingData = async () => {
@@ -411,6 +416,10 @@ export class Game {
     this.startX = x;
     this.startY = y;
 
+    if (this.selectedTool === "eraser") {
+      this.selectionState.isDraggin = true;
+    }
+
     if (this.selectedTool === "pointer") {
       this.handleShapeSelectionMouseDown(x, y)
     }
@@ -461,6 +470,30 @@ export class Game {
   handleMouseUp = async (e: MouseEvent) => {
     this.clicked = false;
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
+    if (this.selectedTool === "eraser") {
+      this.selectionState.isDraggin = false;
+
+      if (this.shapesToDelete.size > 0) {
+        this.existingShapes = this.existingShapes.filter((shape) => !this.shapesToDelete.has(shape.getShapeId()))
+        this.shapesToDelete.clear()
+
+        if (!this.isOnline) {
+          await clearAllShapes(this.dbPromise)
+          for (const shape of this.existingShapes) {
+            await saveShape(this.dbPromise, shape.serialize())
+          }
+
+        }
+
+        if (this.isOnline && this.socket) {
+          //todo
+
+        }
+
+        this.clearCanvas()
+      }
+
+    }
 
     if (this.selectionState.isDraggin || this.selectionState.isResizing) {
       if (this.selectionState.selectedShape) {
@@ -775,6 +808,8 @@ export class Game {
 
 
 
+
+
   handleMouseMove = async (e: MouseEvent) => {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
@@ -782,7 +817,9 @@ export class Game {
 
       sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId, this.sessionId!)
     }
-    if (this.selectedTool === "pointer" && this.selectionState.isResizing) {
+    if (this.selectedTool === "eraser" && this.selectionState.isDraggin) {
+      this.hanldeEraser(e)
+    } else if (this.selectedTool === "pointer" && this.selectionState.isResizing) {
       this.handleShapeResize(e)
     } else if (this.selectedTool === "pointer" && this.selectionState.isDraggin) {
       this.handleShapeDrag(e)
@@ -793,7 +830,30 @@ export class Game {
 
     }
   }
+  hanldeEraser = async (e: MouseEvent) => {
+    const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
+    const { setCursorType } = useCursorType.getState();
 
+
+    setCursorType("cursor-crosshair");
+    let found: boolean = false;
+
+    Object.entries(this.existingPaths).forEach(([id, path]) => {
+      if (this.ctx.isPointInStroke(path, x, y)) {
+        const shapeIndex = this.existingShapes.findIndex(shape => shape.getShapeId() === id)
+        found = true;
+        this.shapesToDelete.add(id)
+        this.existingShapes[shapeIndex].color = "#616161";
+
+        if (found) {
+          this.clearCanvas();
+
+        }
+
+      }
+    })
+
+  }
 
   handleMouseWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -818,11 +878,11 @@ export class Game {
   }
 
   clearCanvas() {
-    this.ctx.setTransform(this.scale * this.dpr, 0, 0, this.scale * this.dpr, this.panX * this.dpr, this.panY * this.dpr);
+    this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.ctx.fillStyle = this.currentTheme;
-    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale / this.dpr, this.canvas.height / this.scale / this.dpr);
+    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);
 
     this.ctx.lineWidth = this.strokeWidth / this.scale;
 

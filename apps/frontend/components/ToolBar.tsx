@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { IconButton } from "./IconButton";
-import { ArrowRight, Circle, Diamond, Hand, MousePointer2, Pencil, RectangleHorizontalIcon, Slash, Type } from "lucide-react";
+import { ArrowRight, Circle, Diamond, Eraser, Hand, MousePointer2, Pencil, RectangleHorizontalIcon, Slash, Type } from "lucide-react";
 import { Tool } from "./Canvas";
 import ColorPicker, { Color } from "./ColorPicker";
 
@@ -48,6 +48,7 @@ export default function ToolBar({
 
             <IconButton icon={<MousePointer2 className="rotate-90 w-4 h-4 " />} activated={selectedTool === "pointer"} onClick={() => setSelectedTool("pointer")} />
             <IconButton icon={<Pencil className="w-4 h-4 " />} activated={selectedTool === "pencil"} onClick={() => setSelectedTool("pencil")} />
+            <IconButton icon={<Eraser className="w-4 h-4 " />} activated={selectedTool === "eraser"} onClick={() => setSelectedTool("eraser")} />
             <IconButton icon={<RectangleHorizontalIcon className="w-4 h-4 " />} activated={selectedTool === "rect"} onClick={() => setSelectedTool("rect")} />
             <IconButton icon={<Circle className="w-4 h-4 " />} activated={selectedTool === "ellipse"} onClick={() => setSelectedTool("ellipse")} />
             <IconButton icon={<Diamond className="w-4 h-4 " />} activated={selectedTool === "diamond"} onClick={() => setSelectedTool("diamond")} />
