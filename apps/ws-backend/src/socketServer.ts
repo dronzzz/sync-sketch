@@ -1,13 +1,14 @@
-
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
 import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, removeUserFromRoom } from './handlers';
-import { JWT_SECRET } from '@repo/backend-common/config';
+// import { JWT_SECRET } from '@repo/backend-common/config';
 
 
 export interface ClientSession {
     sessionId: string;
-    userId: string;
+    username: string;
+    userId?: string;
+    roomId: string | null;
     ws: WebSocket;
 }
 
@@ -15,7 +16,7 @@ export class SocketServer {
     private static instance: SocketServer;
     private wss: WebSocketServer;
     private sessions: Map<string, ClientSession> = new Map();
-    private userSessions: Map<string, Set<string>> = new Map();
+
 
 
 
@@ -32,35 +33,33 @@ export class SocketServer {
 
     }
 
-    private checkUser = (token: string) => {
-        try {
-            const decoded = jwt.verify(token, JWT_SECRET);
-            if (typeof decoded == "string") {
-                return null
-            }
-            if (!decoded || !decoded.userId) {
-                return null;
-            }
-            return decoded.userId;
-        } catch (error) {
-            return null;
-        }
 
-    }
+    // private checkUser = (token: string) => {    //currently auth removed -> might need in future 
+    //     try {
+    //         const decoded = jwt.verify(token, JWT_SECRET);
+    //         if (typeof decoded == "string") {
+    //             return null
+    //         }
+    //         if (!decoded || !decoded.userId) {
+    //             return null;
+    //         }
+    //         return decoded.userId;
+    //     } catch (error) {
+    //         return null;
+    //     }
+    // }
+
     private cleanUpSession = (sessionId: string) => {
         const session = this.sessions.get(sessionId)
         if (!session) return;
 
-        this.sessions.delete(sessionId)
-        const userSessions = this.userSessions.get(session.userId);
-        if (userSessions) {
-            userSessions.delete(sessionId)
-            if (userSessions.size === 0) {
-                this.userSessions.delete(session.userId);
-                removeUserFromRoom(session.userId, sessionId)
-            }
 
+        if (session.roomId) {
+            removeUserFromRoom(sessionId);
         }
+
+
+        this.sessions.delete(sessionId)
     }
 
     private heartBeat = (sessionId: string) => {
@@ -84,42 +83,44 @@ export class SocketServer {
 
     private handleConnection = (ws: WebSocket, request: any) => {
         const url = request.url;
+        console.log(url)
         if (!url) {
             return
         }
 
         const queryParam = new URLSearchParams(url.split("?")[1]);
-        const token = queryParam.get('token') || "";
 
-        const userId = this.checkUser(token);
-        if (userId == null) {
-            ws.close();
-            return;
-        }
+
+        const username = queryParam.get('username') || 'anonymous';
+
+
+        // const token = queryParam.get('token') || "";
+        // const userId = this.checkUser(token);
+        // if (userId == null) {
+        //     ws.close();
+        //     return;
+        // }
 
         const sessionId = crypto.randomUUID();
         const session: ClientSession = {
             sessionId,
-            userId,
+            username,
+            userId: undefined,
+            roomId: null,
             ws
         }
         this.sessions.set(sessionId, session)
 
-        if (!this.userSessions.has(userId)) {
-            this.userSessions.set(userId, new Set())
-        }
-        this.userSessions.get(userId)?.add(sessionId);
-
         ws.send(JSON.stringify({
             type: "session-init",
-            sessionId
+            sessionId,
         }));
 
         this.heartBeat(sessionId)
         console.log('setting sesssion id as -----------------------------', sessionId)
 
         ws.on('error', console.error);
-        ws.on('message', (data) => this.handleMessage(data, userId, sessionId));
+        ws.on('message', (data) => this.handleMessage(data, sessionId));
         ws.on('close', (data) => this.handleClose(ws))
 
     }
@@ -134,7 +135,7 @@ export class SocketServer {
         ws.close();
     }
 
-    private handleMessage = (data: any, userId: string, sessionId: string) => {   //Websocket.Rawdata giving error 
+    private handleMessage = (data: any, sessionId: string) => {
         let parsedData;
         const session = this.sessions.get(sessionId);
         if (!session) return
@@ -161,22 +162,22 @@ export class SocketServer {
 
         switch (parsedData.type) {
             case 'join_room':
-                handleJoinRoom(userId, parsedData, sessionId)
+                handleJoinRoom(session, parsedData)
                 break;
             case 'leave_room':
-                handleLeaveRoom(userId, parsedData, sessionId)
+                handleLeaveRoom(session, parsedData)
                 break;
             case 'chat':
-                handleChat(userId, this.sessions, this.userSessions, parsedData, sessionId)
+                handleChat(session, this.sessions, parsedData)
                 break;
             case 'mouseMovement':
-                handleMouseMovement(userId, this.sessions, this.userSessions, parsedData, sessionId)
+                handleMouseMovement(session, this.sessions, parsedData)
                 break;
             case 'shapeUpdate':
-                handleShapeUpdate(userId, this.sessions, this.userSessions, parsedData, sessionId)
+                handleShapeUpdate(session, this.sessions, parsedData)
                 break;
             case 'shapePreview':
-                handleShapePreview(userId, this.sessions, this.userSessions, parsedData, sessionId)
+                handleShapePreview(session, this.sessions, parsedData)
                 break;
 
             default:

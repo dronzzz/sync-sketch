@@ -4,163 +4,171 @@ import { ClientSession } from "./socketServer";
 
 
 
-export const handleJoinRoom = async (userId: string, parsedData: parsedData, sessionId: string) => {
-    await redis.sadd(`room:${parsedData.roomId}:userId`, userId);
-    await redis.set(`session:${sessionId}:room`, parsedData.roomId);
+export const handleJoinRoom = async (session: ClientSession, parsedData: parsedData) => {
+    const { sessionId, username, roomId: currentRoom } = session;
+    const targetRoomId = parsedData.roomId;
+
+
+    await redis.sadd(`room:${targetRoomId}:sessions`, sessionId);
+
+
+    await redis.set(`session:${sessionId}:room`, targetRoomId);
+
+
+    session.roomId = targetRoomId;
+
+    console.log(`${username} joined room ${targetRoomId}`);
 }
 
-export const handleLeaveRoom = async (userId: string, parsedData: parsedData, sessionId: string) => {
-    await redis.srem(`room:${parsedData.roomId}:userId`, userId);
+export const handleLeaveRoom = async (session: ClientSession, parsedData: parsedData) => {
+    const { sessionId, username } = session;
+    const roomId = parsedData.roomId;
+
+    await redis.srem(`room:${roomId}:sessions`, sessionId);
     await redis.del(`session:${sessionId}:room`);
+
+    session.roomId = null;
+
+    console.log(`${username} left room ${roomId}`);
 }
 
-export const removeUserFromRoom = async (userId: string, sessionId: string) => {
+export const removeUserFromRoom = async (sessionId: string) => {
     const roomId = await redis.get(`session:${sessionId}:room`);
-    await redis.srem(`room:${roomId}:userId`, userId);
+
     if (roomId) {
-        await removeUserFromRoom(userId, roomId);
+
+        await redis.srem(`room:${roomId}:sessions`, sessionId);
         await redis.del(`session:${sessionId}:room`);
+
+
+        const remainingUsers = await redis.scard(`room:${roomId}:sessions`);
+        if (remainingUsers === 0) {
+            console.log(`Room ${roomId} is  empty, cleaning up...`);
+            await redis.del(`room:${roomId}:sessions`);
+
+        }
     }
 }
 
 
 
-export const handleChat = async (userId: string, sessions: Map<string, ClientSession>, userSessions: Map<string, Set<string>>, parsedData: parsedData, currentSessionId: string) => {
+export const handleChat = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
+    const { sessionId, username } = session;
+    const roomId = parsedData.roomId;
 
-    const roomMembers = await redis.smembers(`room:${parsedData.roomId}:userId`);
-    let shape = {
+
+    const roomSessions = await redis.smembers(`room:${roomId}:sessions`);
+
+    const shape = {
         type: "chat",
         message: parsedData.message,
         roomId: parsedData.roomId,
         shapeId: parsedData.shapeId,
         shapeType: parsedData.shapeType,
-        userId: userId
-
+        username,
+        sessionId
     }
 
-    roomMembers.forEach(member => {
-        const memberSessions = userSessions.get(member);
-        console.log("memberSessions", memberSessions)
-        if (memberSessions) {
-            memberSessions.forEach(sessionId => {
 
-                if (member === userId && sessionId === currentSessionId) {
-                    console.log('Skipping user with session id', sessionId)
-                    return;
-                }
+    roomSessions.forEach(targetSessionId => {
+        if (targetSessionId === sessionId) {
 
-                console.log('sending message to sessino id ', sessionId)
+            return;
+        }
 
-                const session = sessions.get(sessionId);
-                if (session?.ws.readyState === WebSocket.OPEN) {
-                    session.ws.send(JSON.stringify(shape));
-                }
-            });
+        const targetSession = sessions.get(targetSessionId);
+        if (targetSession?.ws.readyState === WebSocket.OPEN) {
+            targetSession.ws.send(JSON.stringify(shape));
         }
     });
 
 
-
-    await redis.lpush("messageQueue", JSON.stringify(shape))
+    await redis.lpush("messageQueue", JSON.stringify({
+        ...shape,
+        userId: session.userId
+    }))
 }
 
-export const handleMouseMovement = async (userId: string, sessions: Map<string, ClientSession>, userSessions: Map<string, Set<string>>, parsedData: mouseMovement, currentSessionId: string) => {
-    const roomMembers = await redis.smembers(`room:${parsedData.roomId}:userId`);
+export const handleMouseMovement = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: mouseMovement) => {
+    const { sessionId, username } = session;
+    const roomId = parsedData.roomId;
 
+    const roomSessions = await redis.smembers(`room:${roomId}:sessions`);
 
+    roomSessions.forEach(targetSessionId => {
+        if (targetSessionId === sessionId) {
+            return;
+        }
 
-    roomMembers.forEach(member => {
-        const memberSessions = userSessions.get(member);
-        if (!memberSessions) return
-
-        memberSessions.forEach(sessionId => {
-            if (member === userId && sessionId === currentSessionId) {
-
-                return;
-            }
-
-
-            const session = sessions.get(sessionId);
-            if (session?.ws.readyState === WebSocket.OPEN) {
-                session.ws.send(JSON.stringify({
-                    type: "mouseMovement",
-                    x: parsedData.x,
-                    y: parsedData.y,
-                    roomId: parsedData.roomId,
-                    userId
-
-                }))
-            }
-        })
-
-
+        const targetSession = sessions.get(targetSessionId);
+        if (targetSession?.ws.readyState === WebSocket.OPEN) {
+            targetSession.ws.send(JSON.stringify({
+                type: "mouseMovement",
+                x: parsedData.x,
+                y: parsedData.y,
+                roomId: parsedData.roomId,
+                username,
+                sessionId
+            }))
+        }
     })
 
 }
 
-export const handleShapeUpdate = async (userId: string, sessions: Map<string, ClientSession>, userSessions: Map<string, Set<string>>, parsedData: parsedData, currentSessionId: string) => {
+export const handleShapeUpdate = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
+    const { sessionId, username } = session;
+    const roomId = parsedData.roomId;
 
+    const roomSessions = await redis.smembers(`room:${roomId}:sessions`);
 
-    const roomMembers = await redis.smembers(`room:${parsedData.roomId}:userId`);
-
-    let shape = {
+    const shape = {
         type: "shapeUpdate",
         message: parsedData.message,
         roomId: parsedData.roomId,
         shapeId: parsedData.shapeId,
-        userId
-
+        username,
+        sessionId
     }
 
-    roomMembers.forEach(member => {
-        const memberSessions = userSessions.get(member);
-        if (memberSessions) {
-            memberSessions.forEach(sessionId => {
-
-                if (member === userId && sessionId === currentSessionId) {
-
-                    return;
-                }
-
-                const session = sessions.get(sessionId);
-                if (session?.ws.readyState === WebSocket.OPEN) {
-                    session.ws.send(JSON.stringify(shape));
-                }
-            });
+    roomSessions.forEach(targetSessionId => {
+        if (targetSessionId === sessionId) {
+            return;
         }
-    })
 
-    await redis.lpush("messageQueue", JSON.stringify(shape))
+        const targetSession = sessions.get(targetSessionId);
+        if (targetSession?.ws.readyState === WebSocket.OPEN) {
+            targetSession.ws.send(JSON.stringify(shape));
+        }
+    });
+
+    await redis.lpush("messageQueue", JSON.stringify({
+        ...shape,
+        userId: session.userId
+    }));
 
 }
-export const handleShapePreview = async (userId: string, sessions: Map<string, ClientSession>, userSessions: Map<string, Set<string>>, parsedData: previewShape, currentSessionId: string) => {
 
+export const handleShapePreview = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: previewShape) => {
+    const { sessionId, username } = session;
+    const roomId = parsedData.roomId;
 
-    const roomMembers = await redis.smembers(`room:${parsedData.roomId}:userId`);
+    const roomSessions = await redis.smembers(`room:${roomId}:sessions`);
 
+    roomSessions.forEach(targetSessionId => {
+        if (targetSessionId === sessionId) {
+            return;
+        }
 
-
-    roomMembers.forEach(member => {
-        const memberSessions = userSessions.get(member);
-        if (memberSessions) {
-            memberSessions.forEach(sessionId => {
-
-                if (member === userId && sessionId === currentSessionId) {
-
-                    return;
-                }
-
-                const session = sessions.get(sessionId);
-                if (session?.ws.readyState === WebSocket.OPEN) {
-                    session.ws.send(JSON.stringify({
-                        type: "shapePreview",
-                        message: parsedData.message,
-                        roomId: parsedData.roomId,
-                        userId,
-                        previewType: parsedData.previewType
-                    }));
-                }
-            });
+        const targetSession = sessions.get(targetSessionId);
+        if (targetSession?.ws.readyState === WebSocket.OPEN) {
+            targetSession.ws.send(JSON.stringify({
+                type: "shapePreview",
+                message: parsedData.message,
+                roomId: parsedData.roomId,
+                username,
+                sessionId,
+                previewType: parsedData.previewType
+            }));
         }
     });
 

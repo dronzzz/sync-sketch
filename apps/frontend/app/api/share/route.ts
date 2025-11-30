@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
                 { status: resp.status }
             );
         }
-        const { id } = await resp.json();
-        return NextResponse.json({ roomId: id });
+        const { id, slug } = await resp.json();
+        return NextResponse.json({ roomId: id, slug });
 
 
 

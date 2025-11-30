@@ -40,7 +40,7 @@ export async function startWorker() {
     }
 }
 
-async function handleChatCreation(parsedMessage:parsedMessage ) {
+async function handleChatCreation(parsedMessage: parsedMessage) {
     await prisma.chat.create({
         data: {
             userId: parsedMessage.userId,
@@ -55,10 +55,13 @@ async function handleChatCreation(parsedMessage:parsedMessage ) {
 
 }
 
-async function handleShapeUpdateDb(parsedMessage:parsedMessage) {
+async function handleShapeUpdateDb(parsedMessage: parsedMessage) {
     await prisma.chat.update({
         where: {
+
+            roomId: parsedMessage.roomId,
             shapeId: parsedMessage.shapeId
+
         },
         data: {
             data: parsedMessage.message
@@ -67,11 +70,11 @@ async function handleShapeUpdateDb(parsedMessage:parsedMessage) {
 }
 
 export interface parsedMessage {
-    type:'chat' | 'shapeUpdate';
-    userId : string;
-    roomId:string;
-    shapeId:string;
-    message:any;                                          //need to fix - error prisma.JsonValue not working 
+    type: 'chat' | 'shapeUpdate';
+    userId: string;
+    roomId: string;
+    shapeId: string;
+    message: any;                                          //need to fix - error prisma.JsonValue not working 
     shapeType: 'rect' | 'ellipse' | 'pencil' | 'text' | 'diamond'
-    
+
 }

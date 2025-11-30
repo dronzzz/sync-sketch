@@ -98,18 +98,23 @@ router.get("/chats/:roomId", async (req, res) => {
 
 
 router.get("/room/:slug", async (req, res) => {
-    const { slug } = req.params;
+    try {
+        const { slug } = req.params;
 
-    const room = await prisma.room.findFirst({
-        where: { slug }
-    });
+        const room = await prisma.room.findFirst({
+            where: { slug }
+        });
 
-    if (!room) {
-        res.status(404).json({ error: "Room not found" });
-        return;
+        if (!room) {
+            res.status(404).json({ error: "Room not found" });
+            return;
+        }
+
+        res.json({ roomId: room.id });
+    } catch (error) {
+        console.error("Slug lookup error:", error);
+        res.status(500).json({ error: "Failed to lookup room" });
     }
-
-    res.json({ roomId: room.id });
 });
 
 export default router;

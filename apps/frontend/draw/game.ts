@@ -13,7 +13,7 @@ import { Line } from "./shapes/Line";
 import { Pencil } from "./shapes/Pencil";
 import { Diamond } from "./shapes/Diamond";
 import { Arrow } from "./shapes/Arrow";
-import { getAllShapes, initDB, saveShape, SketchDB } from "@/lib/indexdb";
+import { clearAllShapes, getAllShapes, initDB, saveShape, SketchDB } from "@/lib/indexdb";
 import { IDBPDatabase } from 'idb';
 
 interface SelectionState {
@@ -88,7 +88,7 @@ export class Game {
     this.sessionId = id;
   }
 
-  constructor(canvas: HTMLCanvasElement, socket: WebSocket, roomId: string) {
+  constructor(canvas: HTMLCanvasElement, socket?: WebSocket | null, roomId?: string | null, theme?: string) {
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d")!;
     this.existingShapes = [];
@@ -97,14 +97,13 @@ export class Game {
     this.textRenderer = new TextRenderer(this.ctx)
     this.clicked = false;
     this.isTyping = false;
-    this.socket = socket;
-    this.roomId = roomId;
+    this.socket = socket || null;
+    this.roomId = roomId || null;
     this.selectedColor = "#3d3c3a";
-    this.currentTheme = "#FFFFFF";
+    this.currentTheme = theme || "#FFFFFF";
     this.init();
     this.initHandlers();
     this.mouseHandlers();
-    this.clearCanvas();
 
   }
 
@@ -138,6 +137,14 @@ export class Game {
 
 
   setTool(tool: Tool) {
+
+
+    if (this.selectionState.selectedShape) {
+      this.selectionState.selectedShape = null;
+      this.clearCanvas()
+    }
+
+
     this.selectedTool = tool;
   }
 
@@ -154,6 +161,19 @@ export class Game {
 
   }
 
+  overWriteExistingData = async () => {
+    console.log('Overwriting existing data');
+
+    await clearAllShapes(this.dbPromise);
+
+
+    for (const shape of this.existingShapes) {
+      const serialized = shape.serialize();
+      await saveShape(this.dbPromise, serialized);
+    }
+
+  }
+
   initHandlers() {
     console.log('Initializing WebSocket handlers');
     if (this.isOnline && this.socket) {
@@ -162,13 +182,13 @@ export class Game {
       this.socket.onmessage = async (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('Raw incoming message:', event.data);
-          console.log('Parsed incoming message:', message);
+          // console.log('Raw incoming message:', event.data);
+          // console.log('Parsed incoming message:', message);
 
           if (message.type === "session-init") {
-            console.log('Received session-init message:', message);
+            // console.log('Received session-init message:', message);
             this.sessionId = message.sessionId;
-            console.log('Session ID set to:', this.sessionId);
+            // console.log('Session ID set to:', this.sessionId);
             return;
           }
 
@@ -419,25 +439,23 @@ export class Game {
 
   private updateStore = async (shapeData: BaseShape, opt: 'shapeUpdate' | 'chat') => {
     const serialized = shapeData.serialize();
-    await saveShape(this.dbPromise, serialized)
+
+    if (!this.isOnline) {
+      await saveShape(this.dbPromise, serialized);
+    }
+
+
 
     if (this.isOnline && this.socket) {
-
       this.socket.send(JSON.stringify({
-        type: "shapeUpdate",
+        type: opt,
         roomId: this.roomId,
         message: JSON.stringify(shapeData.serialize()),
         shapeId: shapeData.getShapeId(),
         sessionId: this.sessionId,
         shapeType: shapeData.constructor.name.toLowerCase(),
-
-
-
       }));
     }
-
-
-
   }
 
   handleMouseUp = async (e: MouseEvent) => {
@@ -627,7 +645,7 @@ export class Game {
     const bounds = this.selectionState.selectedShape?.getBounds()
     if (!bounds) return
 
-    switch (this.selectionState.resizeHandle) {
+    switch (this.selectionState.resizeHanle) {
       case 'top-left':
         this.selectionState.selectedShape?.resize(bounds.x + dx, bounds.y + dy, bounds.width - dx, bounds.height - dy)
         break;

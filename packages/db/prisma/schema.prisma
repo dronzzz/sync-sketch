@@ -45,6 +45,7 @@ model Chat {
   user User? @relation(fields: [userId],references: [id])
   
   @@unique([roomId, shapeId])
+  @@index([roomId])
 }
 
 enum ShapeType {
