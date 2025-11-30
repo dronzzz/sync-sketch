@@ -69,7 +69,7 @@ export class Game {
   private selectedColor
   private currentTheme: string
   private existingPaths: { [key: string]: Path2D }
-  private strokeWidth: number = 5;
+  private strokeWidth: number = 7;
   private isHovering: boolean = false; //true if pointer is hover over a shape
   private Handle_size: number = 8;
   private selectionState: SelectionState = {
@@ -99,7 +99,7 @@ export class Game {
     this.isTyping = false;
     this.socket = socket || null;
     this.roomId = roomId || null;
-    this.selectedColor = "#3d3c3a";
+    this.selectedColor = theme === "light" ? "#1f1f1f" : "#d3d3d3";
     this.currentTheme = theme || "#FFFFFF";
     this.init();
     this.initHandlers();
@@ -818,11 +818,11 @@ export class Game {
   }
 
   clearCanvas() {
-    this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
+    this.ctx.setTransform(this.scale * this.dpr, 0, 0, this.scale * this.dpr, this.panX * this.dpr, this.panY * this.dpr);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.ctx.fillStyle = this.currentTheme;
-    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);
+    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale / this.dpr, this.canvas.height / this.scale / this.dpr);
 
     this.ctx.lineWidth = this.strokeWidth / this.scale;
 

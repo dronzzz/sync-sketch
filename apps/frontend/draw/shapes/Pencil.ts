@@ -1,25 +1,38 @@
 import { Shape } from "../types";
 import { BaseShape } from "./BaseShape";
+import { getStroke } from "perfect-freehand";
+export class Pencil extends BaseShape {
+    private points: { x: number, y: number }[]
 
-export class Pencil extends BaseShape{
-    private points:{x:number,y:number}[]
-
-    constructor(points: {x: number, y: number}[], color: string, lineWidth: number, id?: string) {
+    constructor(points: { x: number, y: number }[], color: string, lineWidth: number, id?: string) {
         super(id, color, lineWidth);
         this.points = points;
     }
 
+
+
     draw(ctx: CanvasRenderingContext2D): void {
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = this.lineWidth;
-        ctx.beginPath()
-        ctx.moveTo(this.points[0].x,this.points[0].y)
-        this.points.forEach(pt => {
-            ctx.lineTo(pt.x , pt.y)
-            
+        const points = this.points.map(p => [p.x, p.y]);
+
+
+        const stroke = getStroke(points, {
+            size: this.lineWidth * 2,
+            thinning: 0.5,
+            smoothing: 0.5,
+            streamline: 0.5,
+            easing: t => t
         });
-        ctx.stroke();
+
+        const path = new Path2D();
+        if (stroke.length > 0) {
+            path.moveTo(stroke[0][0], stroke[0][1]);
+            stroke.forEach(([x, y]) => path.lineTo(x, y));
+        }
+
+        ctx.fillStyle = this.color;
+        ctx.fill(path);
     }
+
 
     addPoint(x: number, y: number): void {
         this.points.push({ x, y });
@@ -47,22 +60,22 @@ export class Pencil extends BaseShape{
         return {
             x: minX,
             y: minY,
-            width: maxX - minX ,
-            height: maxY - minY 
+            width: maxX - minX,
+            height: maxY - minY
         };
     }
 
     serialize(): Shape {
-        return{
-            type:'pencil',
-            points:this.points,
+        return {
+            type: 'pencil',
+            points: this.points,
             id: this.getShapeId(),
-            color:this.getColor(),
-            lineWidth:this.getLineWidth()
+            color: this.getColor(),
+            lineWidth: this.getLineWidth()
         }
     }
 
     resize(x: number, y: number, width: number, height: number): void {
-        
+
     }
 }
