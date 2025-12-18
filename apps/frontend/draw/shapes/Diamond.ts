@@ -24,10 +24,10 @@ export class Diamond extends BaseShape{
         ctx.beginPath();
         ctx.strokeStyle=this.color;
         ctx.lineWidth=this.lineWidth;
-        ctx.moveTo(this.centerX, this.centerY);       
-        ctx.lineTo(this.centerX + this.radiusX, this.centerY + this.radiusY);       
-        ctx.lineTo(this.centerX , this.centerY + 2 * this.radiusY);       
-        ctx.lineTo(this.centerX - this.radiusX, this.centerY + this.radiusY);  
+        ctx.moveTo(this.centerX, this.centerY - this.radiusY);       
+        ctx.lineTo(this.centerX + this.radiusX, this.centerY); 
++       ctx.lineTo(this.centerX, this.centerY + this.radiusY); 
++       ctx.lineTo(this.centerX - this.radiusX, this.centerY);
         ctx.closePath();
         ctx.stroke();
     }

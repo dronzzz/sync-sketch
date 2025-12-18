@@ -28,7 +28,7 @@ export default function ColorPicker({
 
     const visibleColors = colors.filter(c => {
         if (c.hex === "#1f1f1f") return !isDark;
-        if (c.hex === "#ffffff") return isDark;
+        if (c.hex === "#d3d3d3") return isDark;
         return true;
     });
     return (

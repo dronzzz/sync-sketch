@@ -66,10 +66,10 @@ export class Game {
   private panX: number = 0;
   private panY: number = 0;
   private isTyping: boolean;
-  private selectedColor
-  private currentTheme: string
+  private selectedColor: string;
+  private currentTheme: string;
   private existingPaths: { [key: string]: Path2D }
-  private strokeWidth: number = 7;
+  private strokeWidth: number = 5;
   private isHovering: boolean = false; //true if pointer is hover over a shape
   private Handle_size: number = 8;
   private selectionState: SelectionState = {
@@ -100,8 +100,8 @@ export class Game {
     this.isTyping = false;
     this.socket = socket || null;
     this.roomId = roomId || null;
+    this.currentTheme = theme === "light" ? "#ffffff" : "#0d0c09";
     this.selectedColor = theme === "light" ? "#1f1f1f" : "#d3d3d3";
-    this.currentTheme = theme || "#FFFFFF";
     this.init();
     this.initHandlers();
     this.mouseHandlers();
@@ -155,9 +155,21 @@ export class Game {
 
   }
 
-  setTheme(color: string) {
-    this.currentTheme = color;
+  setTheme(theme: string) {
+    this.currentTheme = theme;
     this.ctx.fillStyle = this.currentTheme;
+
+    // Automatically adapt the selected color based on theme
+    // If current color is black (#1f1f1f) and switching to dark mode, use light gray (#d3d3d3)
+    // If current color is light gray (#d3d3d3) and switching to light mode, use black (#1f1f1f)
+    if (theme === "#0d0c09" && this.selectedColor === "#1f1f1f") {
+      this.selectedColor = "#d3d3d3";
+      this.ctx.strokeStyle = this.selectedColor;
+    } else if (theme === "#ffffff" && this.selectedColor === "#d3d3d3") {
+      this.selectedColor = "#1f1f1f";
+      this.ctx.strokeStyle = this.selectedColor;
+    }
+
     this.clearCanvas()
 
   }
@@ -554,8 +566,8 @@ export class Game {
         const widthh = canvasCoords.x - this.startX
         const heighth = canvasCoords.y - this.startY
         inputShape = new Diamond(
-          this.startX,
-          this.startY,
+          this.startX + widthh / 2,
+          this.startY + heighth / 2,
           Math.abs(widthh / 2),
           Math.abs(heighth / 2),
           this.selectedColor,
@@ -578,7 +590,9 @@ export class Game {
 
     }
     if (inputShape) {
-      this.existingShapes.push(inputShape);
+      if (this.selectedTool !== "pencil") {
+        this.existingShapes.push(inputShape);
+      }
       this.updateStore(inputShape, 'chat')
       this.clearCanvas();
     }
@@ -776,6 +790,18 @@ export class Game {
         };
         break;
 
+      case "arrow":
+        previewShape = {
+          type: 'arrow',
+          startX: this.startX,
+          startY: this.startY,
+          endX: canvasCoords.x,
+          endY: canvasCoords.y,
+          color: this.selectedColor,
+          lineWidth: this.strokeWidth
+        };
+        break;
+
       case "panTool":
         // this.startX  //initial point which we have to maintain with the canvavs by changin the offset so that the point with resp to canvas remains same
         const dx = e.movementX;
@@ -907,7 +933,8 @@ export class Game {
     this.ctx.save()
     const { path, bounds } = this.getBoundingBox(shape);
     this.ctx.lineWidth = 1 / this.scale;
-    this.ctx.strokeStyle = '#302c94';
+    this.ctx.strokeStyle = this.currentTheme === '#0d0c09' ? '#b2aeff' : '#3029e6ff';
+
     this.ctx.stroke(path);
 
     this.ctx.restore();
@@ -921,7 +948,7 @@ export class Game {
 
     }
     this.ctx.lineWidth = 1 / this.scale;
-    this.ctx.strokeStyle = '#302c94';
+    this.ctx.strokeStyle = this.currentTheme === '#0d0c09' ? '#b2aeff' : '#3029e6ff';
 
 
 
@@ -958,6 +985,9 @@ export class Game {
 
       case 'diamond':
         this.shapeRenderer.drawDiamond(shape);
+        break;
+      case 'arrow':
+        this.shapeRenderer.drawArrow(shape);
         break;
 
       default:
@@ -998,11 +1028,16 @@ export class Game {
         }
         break;
       case 'diamond':
-        path.moveTo(shape.centerX, shape.centerY);
-        path.lineTo(shape.centerX + shape.radiusX, shape.centerY + shape.radiusY);
-        path.lineTo(shape.centerX, shape.centerY + 2 * shape.radiusY);
-        path.lineTo(shape.centerX - shape.radiusX, shape.centerY + shape.radiusY);
+        path.moveTo(shape.centerX, shape.centerY - shape.radiusY);
+        path.lineTo(shape.centerX + shape.radiusX, shape.centerY);
+        path.lineTo(shape.centerX, shape.centerY + shape.radiusY);
+        path.lineTo(shape.centerX - shape.radiusX, shape.centerY);
         path.closePath();
+        break;
+
+      case 'arrow':
+        path.moveTo(shape.startX, shape.startY);
+        path.lineTo(shape.endX, shape.endY);
         break;
 
       default:
