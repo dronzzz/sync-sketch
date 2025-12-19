@@ -52,14 +52,17 @@ export class Arrow extends BaseShape {
     }
 
     getBounds(): { x: number; y: number; width: number; height: number; } {
-        const minX = Math.min(this.startX, this.endX);
-        const minY = Math.min(this.startY, this.endY);
-        const width = Math.abs(this.endX - this.startX);
-        const height = Math.abs(this.endY - this.startY);
-        return { x: minX, y: minY, width, height };
+        return {
+            x: this.startX,
+            y: this.startY,
+            width: this.endX - this.startX,
+            height: this.endY - this.startY
+        };
     }
 
     resize(x: number, y: number, width: number, height: number): void {
+        this.startX = x;
+        this.startY = y;
         this.endX = x + width;
         this.endY = y + height;
     }

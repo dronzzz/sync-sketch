@@ -10,20 +10,24 @@ export abstract class BaseShape {
         this.color = color;
         this.lineWidth = lineWidth;
     }
-    getShapeId():string{
+    getShapeId(): string {
         return this.id;
     }
 
-    getColor():string{
+    getColor(): string {
         return this.color;
     }
 
-    getLineWidth():number{
+    setColor(color: string) {
+        this.color = color;
+    }
+
+    getLineWidth(): number {
         return this.lineWidth;
     }
     abstract drag(dx: number, dy: number): void;
     abstract getBounds(): { x: number, y: number, width: number, height: number };
     abstract draw(ctx: CanvasRenderingContext2D): void;
-    abstract serialize() : Shape
-    abstract resize(x:number, y: number,width:number,height:number):void
+    abstract serialize(): Shape
+    abstract resize(x: number, y: number, width: number, height: number): void
 }

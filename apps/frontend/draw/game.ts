@@ -159,9 +159,6 @@ export class Game {
     this.currentTheme = theme;
     this.ctx.fillStyle = this.currentTheme;
 
-    // Automatically adapt the selected color based on theme
-    // If current color is black (#1f1f1f) and switching to dark mode, use light gray (#d3d3d3)
-    // If current color is light gray (#d3d3d3) and switching to light mode, use black (#1f1f1f)
     if (theme === "#0d0c09" && this.selectedColor === "#1f1f1f") {
       this.selectedColor = "#d3d3d3";
       this.ctx.strokeStyle = this.selectedColor;
@@ -175,7 +172,7 @@ export class Game {
   }
 
   getAllShapesFromGameState = async () => {
-    return this.existingShapes
+    return this.existingShapes.map(shape => shape.serialize());
   }
 
   overWriteExistingData = async () => {
@@ -377,16 +374,30 @@ export class Game {
 
 
   getBoundingBox = (shape: BaseShape) => {
-
-
-    const { x, y, width, height } = shape.getBounds()
+    const { x, y, width, height } = shape.getBounds();
     const gap = 10;
 
-    const path = new Path2D;
-    path.rect(x - gap, y - gap, width + gap * 2, height + gap * 2);
+    const normalizedX = width < 0 ? x + width : x;
+    const normalizedY = height < 0 ? y + height : y;
+    const normalizedWidth = Math.abs(width);
+    const normalizedHeight = Math.abs(height);
+
+    const path = new Path2D();
+    path.rect(
+      normalizedX - gap,
+      normalizedY - gap,
+      normalizedWidth + gap * 2,
+      normalizedHeight + gap * 2
+    );
+
     return {
       path,
-      bounds: { x: x - gap, y: y - gap, width: width + gap * 2, height: height + gap * 2 }
+      bounds: {
+        x: normalizedX - gap,
+        y: normalizedY - gap,
+        width: normalizedWidth + gap * 2,
+        height: normalizedHeight + gap * 2
+      }
     };
   }
 
@@ -420,6 +431,17 @@ export class Game {
       this.drawBoundingBox(this.selectionState.selectedShape)
 
     }
+  }
+
+  private themeBasedColorAdapter = (shape: BaseShape) => {
+
+    let originalColor = shape.getColor();
+    if (this.currentTheme === "#ffffff" && originalColor === "#d3d3d3")
+      return "#1f1f1f"
+    if (this.currentTheme === "#0d0c09" && originalColor === "#1f1f1f")
+      return "#d3d3d3"
+
+    return originalColor;
   }
 
   handleMouseDown = (e: MouseEvent) => {
@@ -921,6 +943,7 @@ export class Game {
 
 
     this.existingShapes.forEach((shape) => {
+      shape.setColor(this.themeBasedColorAdapter(shape))
       shape.draw(this.ctx)
       this.updateShapePath(shape)
 
