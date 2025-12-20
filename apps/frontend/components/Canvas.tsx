@@ -10,7 +10,7 @@ import { useTheme } from "next-themes";
 import MousePositionPointer from "./MousePositionPointer";
 import { ToggleTheme } from "./ToggleTheme";
 import { ShareButton } from "./ShareButton";
-import { getAllShapes } from "@/lib/indexdb";
+import { UndoRedoButton, undoRedoButton } from "./UndoRedoButton";
 import { ShareDialog } from "./ShareDialog";
 
 
@@ -179,6 +179,9 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
             <ShareButton onClick={handleShare} isSharing={isOnline} />
 
             <MousePositionPointer />
+            {game && (
+                <UndoRedoButton game={game} />
+            )}
 
             {loading && roomId && (() => {
                 return (

@@ -157,10 +157,25 @@ export class Game {
     this.selectedTool = tool;
   }
 
-  setColor(color: any) {
+  setColor = async (color: any) => {
     this.selectedColor = color.hex;
     this.ctx.strokeStyle = color.hex;
 
+    if (this.selectionState.selectedShape) {
+      const index = this.existingShapes.findIndex((shape) => shape.getShapeId() === this.selectionState.selectedShape!.getShapeId());
+
+      if (index !== -1 && this.existingShapes[index]) {
+        const previousState = this.existingShapes[index].serialize();
+        this.existingShapes[index].setColor(color.hex);
+
+        if (this.commandManager) {
+          this.commandManager.modify(this.existingShapes[index], previousState);
+        }
+
+        await this.updateStore(this.existingShapes[index], "shapeUpdate");
+        this.clearCanvas();
+      }
+    }
   }
 
   setTheme(theme: string) {
@@ -270,6 +285,53 @@ export class Game {
     }
   }
 
+  undo = async () => {
+    if (this.commandManager) {
+      const action = this.commandManager.undo();
+
+      if (action) {
+        const shape = this.existingShapes.find(s => s.getShapeId() === action.shapeId);
+
+        if (action.action === 'add') {
+          const tempShape = ShapeFactory.createShapeFromData(action.shapeData);
+          await this.updateStore(tempShape, 'shapeDelete');
+        } else if (action.action === 'delete' && shape) {
+          await this.updateStore(shape, 'chat');
+        } else if (action.action === 'modify' && shape) {
+          await this.updateStore(shape, 'shapeUpdate');
+        }
+      }
+      this.selectionState.selectedShape = null;
+      this.clearCanvas();
+    }
+
+  }
+
+  redo = async () => {
+
+    if (this.commandManager) {
+      const action = this.commandManager.redo();
+
+      if (action) {
+        const shape = this.existingShapes.find(s => s.getShapeId() === action.shapeId);
+
+        if (action.action === 'add' && shape) {
+          await this.updateStore(shape, 'chat');
+        } else if (action.action === 'delete') {
+          const tempShape = ShapeFactory.createShapeFromData(action.shapeData);
+          await this.updateStore(tempShape, 'shapeDelete');
+        } else if (action.action === 'modify' && shape) {
+          await this.updateStore(shape, 'shapeUpdate');
+        }
+      }
+
+      this.selectionState.selectedShape = null;
+      this.clearCanvas();
+    }
+
+
+  }
+
 
   mouseHandlers() {
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
@@ -339,28 +401,16 @@ export class Game {
 
 
     if (e.ctrlKey && e.key === "z") {
-      console.log('undo')
+
       e.preventDefault();
-      if (this.commandManager) {
-        this.commandManager.undo();
-        if (!this.isOnline) {
-          await this.overWriteExistingData();
-        }
-      }
+      this.undo();
     }
 
     if (e.ctrlKey && e.key === "y") {
 
       e.preventDefault();
-      if (this.commandManager) {
-        this.commandManager.redo();
-        if (!this.isOnline) {
-          await this.overWriteExistingData();
-        }
-      }
+      this.redo();
     }
-
-
   }
 
   getResizeHandlers = (bounds: {
@@ -464,15 +514,14 @@ export class Game {
     }
   }
 
-  private themeBasedColorAdapter = (shape: BaseShape) => {
 
-    let originalColor = shape.getColor();
-    if (this.currentTheme === "#ffffff" && originalColor === "#d3d3d3")
+  private themeBasedColorAdapter = (color: string): string => {
+    if (this.currentTheme === "#ffffff" && color === "#d3d3d3")
       return "#1f1f1f"
-    if (this.currentTheme === "#0d0c09" && originalColor === "#1f1f1f")
+    if (this.currentTheme === "#0d0c09" && color === "#1f1f1f")
       return "#d3d3d3"
 
-    return originalColor;
+    return color;
   }
 
   handleMouseDown = (e: MouseEvent) => {
@@ -511,7 +560,7 @@ export class Game {
 
   };
 
-  private updateStore = async (shapeData: BaseShape, opt: 'shapeUpdate' | 'chat') => {
+  private updateStore = async (shapeData: BaseShape, opt: 'shapeUpdate' | 'chat' | 'shapeDelete') => {
     const serialized = shapeData.serialize();
 
     if (!this.isOnline) {
@@ -524,13 +573,15 @@ export class Game {
       this.socket.send(JSON.stringify({
         type: opt,
         roomId: this.roomId,
-        message: JSON.stringify(shapeData.serialize()),
+        message: opt !== "shapeDelete" ? JSON.stringify(shapeData.serialize()) : null,
         shapeId: shapeData.getShapeId(),
         sessionId: this.sessionId,
         shapeType: shapeData.constructor.name.toLowerCase(),
       }));
     }
   }
+
+
 
   handleMouseUp = async (e: MouseEvent) => {
     this.clicked = false;
@@ -946,29 +997,25 @@ export class Game {
 
     }
   }
-  hanldeEraser = async (e: MouseEvent) => {
-    const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
-    const { setCursorType } = useCursorType.getState();
+  hanldeEraser = (e: MouseEvent) => {
+    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
 
-
-    setCursorType("cursor-crosshair");
-    let found: boolean = false;
+    let found = false;
 
     Object.entries(this.existingPaths).forEach(([id, path]) => {
-      if (this.ctx.isPointInStroke(path, x, y)) {
-        const shapeIndex = this.existingShapes.findIndex(shape => shape.getShapeId() === id)
-        found = true;
-        this.shapesToDelete.add(id)
-        this.existingShapes[shapeIndex].color = "#616161";
+      if (!found && this.ctx.isPointInStroke(path, canvasCoords.x, canvasCoords.y)) {
+        const shapeIndex = this.existingShapes.findIndex(shape => shape.getShapeId() === id);
 
-        if (found) {
+
+        if (shapeIndex !== -1 && this.existingShapes[shapeIndex]) {
+          found = true;
+          this.shapesToDelete.add(id);
+
+          this.existingShapes[shapeIndex].setColor("#b0adadff");
           this.clearCanvas();
-
         }
-
       }
-    })
-
+    });
   }
 
   handleMouseWheel = (e: WheelEvent) => {
@@ -1011,11 +1058,13 @@ export class Game {
 
 
     this.existingShapes.forEach((shape) => {
-      shape.setColor(this.themeBasedColorAdapter(shape))
-      shape.draw(this.ctx)
-      this.updateShapePath(shape)
+      const adaptedColor = this.themeBasedColorAdapter(shape.getColor());
 
-
+      const originalColor = shape.getColor();
+      shape.setColor(adaptedColor);
+      shape.draw(this.ctx);
+      this.updateShapePath(shape);
+      shape.setColor(originalColor);
     });
   }
 
@@ -1055,37 +1104,38 @@ export class Game {
   }
 
   drawAllShapes = (shape: Shape) => {
+    const adaptedColor = this.themeBasedColorAdapter(shape.color);
 
+    const adaptedShape = { ...shape, color: adaptedColor };
 
-    switch (shape.type) {
+    switch (adaptedShape.type) {
       case 'rect':
-        this.shapeRenderer.drawRect(shape);
+        this.shapeRenderer.drawRect(adaptedShape);
         break;
 
       case 'ellipse':
-        this.shapeRenderer.drawEllipse(shape);
+        this.shapeRenderer.drawEllipse(adaptedShape);
         break;
 
       case 'line':
-        this.shapeRenderer.drawLine(shape);
+        this.shapeRenderer.drawLine(adaptedShape);
         break;
 
       case 'pencil':
-        this.shapeRenderer.drawPencil(shape);
+        this.shapeRenderer.drawPencil(adaptedShape);
         break;
 
       case 'diamond':
-        this.shapeRenderer.drawDiamond(shape);
+        this.shapeRenderer.drawDiamond(adaptedShape);
         break;
       case 'arrow':
-        this.shapeRenderer.drawArrow(shape);
+        this.shapeRenderer.drawArrow(adaptedShape);
         break;
 
       default:
-        break
+        break;
     }
   }
-
 
 
 

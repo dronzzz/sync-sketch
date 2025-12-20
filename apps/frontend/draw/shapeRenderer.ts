@@ -1,4 +1,4 @@
-import { Diamond, Ellipse, Line, Pencil, Rect, Arrow} from "./types";
+import { Diamond, Ellipse, Line, Pencil, Rect, Arrow } from "./types";
 
 
 export class ShapeRenderer {
@@ -57,7 +57,7 @@ export class ShapeRenderer {
         this.ctx.stroke();
     }
 
-    drawArrow(shape: Arrow){
+    drawArrow(shape: Arrow) {
         this.ctx.strokeStyle = shape.color;
         this.ctx.lineWidth = shape.lineWidth;
         this.ctx.moveTo(shape.startX, shape.startY);
