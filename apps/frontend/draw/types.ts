@@ -3,8 +3,8 @@ export type Shape = Rect | Ellipse | Line | Pencil | TextInput | Diamond | Arrow
 
 interface baseShape {
     type: string;
-    id? :string;
-    color:string;
+    id?: string;
+    color: string;
     lineWidth: number;
 
 }
@@ -19,21 +19,21 @@ export interface Rect extends baseShape {
 
 export interface Ellipse extends baseShape {
     type: "ellipse";
-    centerX: number;    
-    centerY: number;    
-    radiusX: number;    
-    radiusY: number;   
+    centerX: number;
+    centerY: number;
+    radiusX: number;
+    radiusY: number;
     // rotation: number;
     // startAngle: number;
     // endAngle: any;
 };
 
 export interface Line extends baseShape {
-    type : "line";
-    startX : number;  
-    startY : number;   
-    endX : number;
-    endY : number;
+    type: "line";
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
 
 }
 
@@ -46,28 +46,28 @@ export interface Arrow extends baseShape {
     endY: number;
 }
 
-export interface Pencil extends baseShape{
-    type:"pencil",
-    points:{x:number , y:number}[]
-    
-    
+export interface Pencil extends baseShape {
+    type: "pencil",
+    points: { x: number, y: number }[]
+
+
 }
 
 export interface TextInput extends baseShape {
     type: "text",
-    textContent : string;
-    startX : number;   //startX
+    textContent: string;
+    startX: number;   //startX
     startY: number;    //startY
-    maxWidth : number;
-    font?:number; 
+    maxWidth: number;
+    font?: number;
 }
 
 
 
 export interface Diamond extends baseShape {
     type: "diamond";
-    centerX: number;    
-    centerY: number;    
-    radiusX: number;    
-    radiusY: number;   
+    centerX: number;
+    centerY: number;
+    radiusX: number;
+    radiusY: number;
 }

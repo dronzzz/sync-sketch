@@ -24,6 +24,10 @@ export async function startWorker() {
                     await handleShapeUpdateDb(parsedMessage);
                     break;
 
+                case 'shapeDelete':
+                    await handleShapeDeleteDb(parsedMessage);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${parsedMessage.type}`);
                     return;
@@ -58,10 +62,10 @@ async function handleChatCreation(parsedMessage: parsedMessage) {
 async function handleShapeUpdateDb(parsedMessage: parsedMessage) {
     await prisma.chat.update({
         where: {
-
-            roomId: parsedMessage.roomId,
-            shapeId: parsedMessage.shapeId
-
+            roomId_shapeId: {
+                roomId: parsedMessage.roomId,
+                shapeId: parsedMessage.shapeId
+            }
         },
         data: {
             data: parsedMessage.message
@@ -69,8 +73,27 @@ async function handleShapeUpdateDb(parsedMessage: parsedMessage) {
     })
 }
 
+async function handleShapeDeleteDb(parsedMessage: parsedMessage) {
+    try {
+        console.log('[Worker] Attempting to delete shape:', parsedMessage.shapeId, 'from room:', parsedMessage.roomId);
+
+        const result = await prisma.chat.delete({
+            where: {
+                roomId_shapeId: {
+                    roomId: parsedMessage.roomId,
+                    shapeId: parsedMessage.shapeId
+                }
+            }
+        });
+
+        console.log('[Worker] Successfully deleted shape:', parsedMessage.shapeId);
+    } catch (error) {
+        console.error('[Worker] Error deleting shape:', parsedMessage.shapeId, error);
+    }
+}
+
 export interface parsedMessage {
-    type: 'chat' | 'shapeUpdate';
+    type: 'chat' | 'shapeUpdate' | 'shapeDelete';
     userId: string;
     roomId: string;
     shapeId: string;

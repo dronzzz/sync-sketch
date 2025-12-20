@@ -148,6 +148,37 @@ export const handleShapeUpdate = async (session: ClientSession, sessions: Map<st
 
 }
 
+export const handleShapeDelete = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
+    const { sessionId, username } = session;
+    const roomId = parsedData.roomId;
+
+    const roomSessions = await redis.smembers(`room:${roomId}:sessions`);
+
+    const deleteMessage = {
+        type: "shapeDelete",
+        roomId: parsedData.roomId,
+        shapeId: parsedData.shapeId,
+        username,
+        sessionId
+    }
+
+    roomSessions.forEach(targetSessionId => {
+        if (targetSessionId === sessionId) {
+            return;
+        }
+
+        const targetSession = sessions.get(targetSessionId);
+        if (targetSession?.ws.readyState === WebSocket.OPEN) {
+            targetSession.ws.send(JSON.stringify(deleteMessage));
+        }
+    });
+
+    await redis.lpush("messageQueue", JSON.stringify({
+        ...deleteMessage,
+        userId: session.userId
+    }));
+}
+
 export const handleShapePreview = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: previewShape) => {
     const { sessionId, username } = session;
     const roomId = parsedData.roomId;

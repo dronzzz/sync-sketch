@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
-import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, removeUserFromRoom } from './handlers';
+import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, handleShapeDelete, removeUserFromRoom } from './handlers';
 // import { JWT_SECRET } from '@repo/backend-common/config';
 
 
@@ -175,6 +175,9 @@ export class SocketServer {
                 break;
             case 'shapeUpdate':
                 handleShapeUpdate(session, this.sessions, parsedData)
+                break;
+            case 'shapeDelete':
+                handleShapeDelete(session, this.sessions, parsedData)
                 break;
             case 'shapePreview':
                 handleShapePreview(session, this.sessions, parsedData)

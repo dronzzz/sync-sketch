@@ -15,6 +15,7 @@ import { Diamond } from "./shapes/Diamond";
 import { Arrow } from "./shapes/Arrow";
 import { clearAllShapes, getAllShapes, initDB, saveShape, SketchDB } from "@/lib/indexdb";
 import { IDBPDatabase } from 'idb';
+import { CommandManager } from "./utils/CommandManager";
 
 interface SelectionState {
   selectedShape: BaseShape | null,
@@ -23,6 +24,7 @@ interface SelectionState {
   dragStartY: number,
   isResizing: boolean,
   resizeHanle: any | null,
+  previousState: Shape | null,
 }
 
 const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string, sessionId: string) => {
@@ -79,11 +81,13 @@ export class Game {
     dragStartY: 0,
     isResizing: false,
     resizeHanle: null,
+    previousState: null,
   }
   private sessionId: string | null = null;
   private isOnline: boolean = false;
   private dbPromise: any | null = null;
   private shapesToDelete: Set<string> = new Set();
+  private commandManager: CommandManager | null = null;
 
   setSessionId(id: string) {
     this.sessionId = id;
@@ -129,6 +133,10 @@ export class Game {
         ShapeFactory.createShapeFromData(shapeData)
       );
     }
+
+
+    this.commandManager = new CommandManager(this.existingShapes, () => this.clearCanvas());
+
     this.clearCanvas();
   }
 
@@ -233,6 +241,15 @@ export class Game {
 
             }
             this.clearCanvas();
+          }
+
+          if (message.type === 'shapeDelete') {
+            const shapeId = message.shapeId;
+            const index = this.existingShapes.findIndex(s => s.getShapeId() === shapeId);
+            if (index !== -1) {
+              this.existingShapes.splice(index, 1);
+              this.clearCanvas();
+            }
           } else if (message.type === 'shapePreview') {
             const previewShape = JSON.parse(message.message);
 
@@ -287,7 +304,7 @@ export class Game {
     return key.length === 1 || key === " "
 
   }
-  handleKeys = (e: KeyboardEvent) => {
+  handleKeys = async (e: KeyboardEvent) => {
 
     if (this.selectedTool === "text" && this.isTyping === true) {
       e.preventDefault();
@@ -322,16 +339,28 @@ export class Game {
 
 
     if (e.ctrlKey && e.key === "z") {
-
-      //undo
-
-
+      console.log('undo')
+      e.preventDefault();
+      if (this.commandManager) {
+        this.commandManager.undo();
+        if (!this.isOnline) {
+          await this.overWriteExistingData();
+        }
+      }
     }
+
     if (e.ctrlKey && e.key === "y") {
 
-      //redo 
-
+      e.preventDefault();
+      if (this.commandManager) {
+        this.commandManager.redo();
+        if (!this.isOnline) {
+          await this.overWriteExistingData();
+        }
+      }
     }
+
+
   }
 
   getResizeHandlers = (bounds: {
@@ -408,12 +437,14 @@ export class Game {
       this.selectionState.resizeHanle = resizeHandle;
       this.selectionState.dragStartX = x;
       this.selectionState.dragStartY = y;
+      this.selectionState.previousState = this.selectionState.selectedShape.serialize();
       console.log('inside the handleShapeSelectionMouseDown')
     } else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, x, y)) {
       console.log('is inside the bounding box')
       this.selectionState.isDraggin = true;
       this.selectionState.dragStartX = x;
       this.selectionState.dragStartY = y;
+      this.selectionState.previousState = this.selectionState.selectedShape.serialize(); //state before modificatoin
 
     } else {
       console.log('is outside the bounding box')
@@ -508,6 +539,17 @@ export class Game {
       this.selectionState.isDraggin = false;
 
       if (this.shapesToDelete.size > 0) {
+
+        const shapesToDeleteArray = this.existingShapes.filter(
+          (shape) => this.shapesToDelete.has(shape.getShapeId())
+        );
+
+        if (this.commandManager) {
+          shapesToDeleteArray.forEach(shape => {
+            this.commandManager!.delete(shape); //delete from stack 
+          });
+        }
+
         this.existingShapes = this.existingShapes.filter((shape) => !this.shapesToDelete.has(shape.getShapeId()))
         this.shapesToDelete.clear()
 
@@ -520,8 +562,15 @@ export class Game {
         }
 
         if (this.isOnline && this.socket) {
-          //todo
 
+          shapesToDeleteArray.forEach(shape => {
+            this.socket!.send(JSON.stringify({
+              type: 'shapeDelete',
+              roomId: this.roomId,
+              shapeId: shape.getShapeId(),
+              sessionId: this.sessionId,
+            }));
+          });
         }
 
         this.clearCanvas()
@@ -530,12 +579,23 @@ export class Game {
     }
 
     if (this.selectionState.isDraggin || this.selectionState.isResizing) {
-      if (this.selectionState.selectedShape) {
-        await this.updateStore(this.selectionState.selectedShape, 'shapeUpdate');
+      if (this.selectionState.selectedShape && this.selectionState.previousState) {
+        const currentState = this.selectionState.selectedShape.serialize();
+
+        const hasChanged = JSON.stringify(currentState) !== JSON.stringify(this.selectionState.previousState);
+
+        if (hasChanged) {
+          await this.updateStore(this.selectionState.selectedShape, 'shapeUpdate');
+
+          if (this.commandManager) {
+            this.commandManager.modify(this.selectionState.selectedShape, this.selectionState.previousState);
+          }
+        }
       }
       this.selectionState.isDraggin = false;
       this.selectionState.isResizing = false;
-      this.selectionState.resizeHanle = null
+      this.selectionState.resizeHanle = null;
+      this.selectionState.previousState = null;
     }
 
 
@@ -615,6 +675,14 @@ export class Game {
       if (this.selectedTool !== "pencil") {
         this.existingShapes.push(inputShape);
       }
+
+      const bounds = inputShape.getBounds();
+      const hasSize = Math.abs(bounds.width) > 1 || Math.abs(bounds.height) > 1;
+
+      if (this.commandManager && hasSize) {
+        this.commandManager.add(inputShape);
+      }
+
       this.updateStore(inputShape, 'chat')
       this.clearCanvas();
     }
