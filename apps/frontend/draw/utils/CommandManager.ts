@@ -64,8 +64,9 @@ export class CommandManager {
     undo() {
         if (this.doStack.length === 0) return;
         const action = this.doStack.pop();
+        if (!action) return;
         this.executeUndo(action);
-        this.redoStack.push(action!);
+        this.redoStack.push(action);
         return action;
 
     }
@@ -73,8 +74,9 @@ export class CommandManager {
     redo() {
         if (this.redoStack.length === 0) return;
         const action = this.redoStack.pop();
+        if (!action) return;
         this.executeRedo(action);
-        this.doStack.push(action!);
+        this.doStack.push(action);
         return action;
 
     }

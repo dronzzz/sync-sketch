@@ -83,6 +83,7 @@ export class Game {
     resizeHanle: null,
     previousState: null,
   }
+  private hitTolerance: number = 16;
   private sessionId: string | null = null;
   private isOnline: boolean = false;
   private dbPromise: any | null = null;
@@ -362,6 +363,14 @@ export class Game {
 
   }
 
+  getMousePixelCoords(clientX: number, clientY: number) {  //screen coord -->pixel coord
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      pixelX: clientX - rect.left,
+      pixelY: clientY - rect.top
+    };
+  }
+
   isWritableKey(key: string): boolean {
     return key.length === 1 || key === " "
 
@@ -480,7 +489,9 @@ export class Game {
     };
   }
 
-  handleShapeSelectionMouseDown = (x: number, y: number) => {
+  handleShapeSelectionMouseDown = (e: MouseEvent) => {
+    const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY)
+    const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
     const resizeHandle = this.checkIfHandleAtPoint(x, y);
     if (this.selectionState.selectedShape && resizeHandle !== null) {
       this.selectionState.isResizing = true;
@@ -489,7 +500,7 @@ export class Game {
       this.selectionState.dragStartY = y;
       this.selectionState.previousState = this.selectionState.selectedShape.serialize();
       console.log('inside the handleShapeSelectionMouseDown')
-    } else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, x, y)) {
+    } else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, pixelX, pixelY)) {
       console.log('is inside the bounding box')
       this.selectionState.isDraggin = true;
       this.selectionState.dragStartX = x;
@@ -535,7 +546,7 @@ export class Game {
     }
 
     if (this.selectedTool === "pointer") {
-      this.handleShapeSelectionMouseDown(x, y)
+      this.handleShapeSelectionMouseDown(e)
     }
 
     if (this.selectedTool === "pencil" && this.clicked === true) {
@@ -601,7 +612,11 @@ export class Game {
           });
         }
 
-        this.existingShapes = this.existingShapes.filter((shape) => !this.shapesToDelete.has(shape.getShapeId()))
+        for (let i = this.existingShapes.length - 1; i >= 0; i--) {
+          if (this.shapesToDelete.has(this.existingShapes[i].getShapeId())) {
+            this.existingShapes.splice(i, 1);
+          }
+        }
         this.shapesToDelete.clear()
 
         if (!this.isOnline) {
@@ -746,6 +761,8 @@ export class Game {
     const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
     const { cursorType, setCursorType } = useCursorType.getState();
 
+    const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
+
     if (this.selectionState.selectedShape) {
       const handleType = this.checkIfHandleAtPoint(x, y);
       if (handleType !== null) {
@@ -774,12 +791,16 @@ export class Game {
 
 
     this.isHovering = false;
+    this.ctx.save();
+    const hitLineWidth = this.hitTolerance / this.scale;
+    this.ctx.lineWidth = hitLineWidth;
     Object.entries(this.existingPaths).forEach(([id, path]) => {
-      if (this.ctx.isPointInStroke(path, x, y)) {
+      if (this.ctx.isPointInStroke(path, pixelX, pixelY)) {
         this.isHovering = true;
         this.selectionState.selectedShape = this.existingShapes.find(shape => shape.getShapeId() === id) ?? null;
       }
     })
+    this.ctx.restore();
 
     const nextCursor = this.isHovering ? 'cursor-move' : 'cursor-default';
 
@@ -998,12 +1019,15 @@ export class Game {
     }
   }
   hanldeEraser = (e: MouseEvent) => {
-    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
+    const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
 
     let found = false;
+    this.ctx.save();
+    const hitLineWidth = this.hitTolerance / this.scale;
+    this.ctx.lineWidth = hitLineWidth;
 
     Object.entries(this.existingPaths).forEach(([id, path]) => {
-      if (!found && this.ctx.isPointInStroke(path, canvasCoords.x, canvasCoords.y)) {
+      if (!found && this.ctx.isPointInStroke(path, pixelX, pixelY)) {
         const shapeIndex = this.existingShapes.findIndex(shape => shape.getShapeId() === id);
 
 
@@ -1016,6 +1040,7 @@ export class Game {
         }
       }
     });
+    this.ctx.restore();
   }
 
   handleMouseWheel = (e: WheelEvent) => {
