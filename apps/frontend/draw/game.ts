@@ -1,56 +1,19 @@
 import { Tool } from "@/components/Canvas";
 import { getExistingShapes } from "./http";
 import { Shape } from "./types";
-import { ShapeRenderer } from "./shapeRenderer";
-import throttle from 'lodash.throttle';
 import { TextRenderer } from "./textRenderer";
 import { useCursorType, useMouseStore } from "@/store/useMouseStore";
 import { BaseShape } from "./shapes/BaseShape";
 import { ShapeFactory } from "./utils/ShapeFactory";
-import { Rect } from "./shapes/Rect";
-import { Ellipse } from "./shapes/Ellipse";
-import { Line } from "./shapes/Line";
 import { Pencil } from "./shapes/Pencil";
-import { Diamond } from "./shapes/Diamond";
-import { Arrow } from "./shapes/Arrow";
 import { clearAllShapes, getAllShapes, initDB, saveShape, SketchDB } from "@/lib/indexdb";
 import { IDBPDatabase } from 'idb';
 import { CommandManager } from "./utils/CommandManager";
+import { RenderingManager } from "./RenderingManager";
+import { SelectionManager } from "./SelectionManager";
+import { DrawingManager } from "./DrawingManager";
+import { CollaborationManager } from "./CollaborationManager";
 
-interface SelectionState {
-  selectedShape: BaseShape | null,
-  isDraggin: boolean,
-  dragStartX: number,
-  dragStartY: number,
-  isResizing: boolean,
-  resizeHanle: any | null,
-  previousState: Shape | null,
-}
-
-const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roomId: string, sessionId: string) => {
-  socket.send(JSON.stringify({
-    type: "mouseMovement",
-    x,
-    y,
-    roomId,
-    sessionId,
-  }))
-}, 100)
-
-const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, roomId: string, preview: string, sessionId: string) => {
-  if (!sessionId) {
-    console.warn('Attempting to send shape preview without session ID');
-    return;
-  }
-
-  socket.send(JSON.stringify({
-    type: "shapePreview",
-    roomId: roomId,
-    message: JSON.stringify(inputShape),
-    previewType: preview,
-    sessionId
-  }))
-}, 150)
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -62,7 +25,6 @@ export class Game {
   private startY: number = 0;
   private socket: WebSocket | null;
   private selectedTool: Tool = "panTool";
-  private shapeRenderer: ShapeRenderer;
   private textRenderer: TextRenderer;
   private scale: number = 1;
   private panX: number = 0;
@@ -72,25 +34,22 @@ export class Game {
   private currentTheme: string;
   private existingPaths: { [key: string]: Path2D }
   private strokeWidth: number = 5;
-  private isHovering: boolean = false; //true if pointer is hover over a shape
   private Handle_size: number = 8;
-  private selectionState: SelectionState = {
-    selectedShape: null,
-    isDraggin: false,
-    dragStartX: 0,
-    dragStartY: 0,
-    isResizing: false,
-    resizeHanle: null,
-    previousState: null,
-  }
+  private isEraserDragging: boolean = false;
+
   private hitTolerance: number = 16;
   private sessionId: string | null = null;
   private isOnline: boolean = false;
   private dbPromise: any | null = null;
   private shapesToDelete: Set<string> = new Set();
   private commandManager: CommandManager | null = null;
+  private collaborationManager: CollaborationManager;
+  private renderingManager: RenderingManager;
+  private selectionManager: SelectionManager;
+  private drawingManager: DrawingManager;
 
   setSessionId(id: string) {
+    this.collaborationManager.setSessionId(id);
     this.sessionId = id;
   }
 
@@ -99,7 +58,6 @@ export class Game {
     this.ctx = this.canvas.getContext("2d")!;
     this.existingShapes = [];
     this.existingPaths = {}
-    this.shapeRenderer = new ShapeRenderer(this.ctx);
     this.textRenderer = new TextRenderer(this.ctx)
     this.clicked = false;
     this.isTyping = false;
@@ -107,8 +65,90 @@ export class Game {
     this.roomId = roomId || null;
     this.currentTheme = theme === "light" ? "#ffffff" : "#0d0c09";
     this.selectedColor = theme === "light" ? "#1f1f1f" : "#d3d3d3";
+
+    this.collaborationManager = new CollaborationManager(socket, roomId,
+      (shape: BaseShape) => {
+        this.existingShapes.push(shape);
+        this.renderingManager.clearCanvas();
+      },
+      (shape: BaseShape) => {
+        const i = this.existingShapes.findIndex(s => s.getShapeId() === shape.getShapeId());
+
+        if (i !== -1) {
+          this.existingShapes[i] = shape
+        } else {
+          this.existingShapes.push(shape)
+
+        }
+        this.renderingManager.clearCanvas();
+
+      },
+      (shapeId: string) => {
+        const index = this.existingShapes.findIndex(s => s.getShapeId() === shapeId);
+        if (index !== -1) {
+          this.existingShapes.splice(index, 1);
+          this.renderingManager.clearCanvas();
+        }
+
+
+      },
+      (shape: Shape, messageType: string) => {
+        if (messageType === 'modification') {
+          this.existingShapes = this.existingShapes.filter(
+            s => s.getShapeId() !== shape.id
+          );
+        }
+
+        this.renderingManager.clearCanvas();
+        this.renderingManager.drawAllShapes(shape);
+
+      },
+      (userId: string, x: number, y: number) => {
+        const { setMousePosition } = useMouseStore.getState();
+        setMousePosition(userId, x, y);
+      },
+      () => ({ scale: this.scale, panX: this.panX, panY: this.panY })
+    );
+
+
+
+    this.renderingManager = new RenderingManager(this.ctx,
+      this.Handle_size,
+      () => this.strokeWidth,
+      () => this.currentTheme,
+      () => ({ scale: this.scale, panX: this.panX, panY: this.panY }),
+      () => this.existingShapes,
+      () => this.existingPaths,
+      () => this.selectionManager.getSelectedShape(),
+      () => ({ canvasWidth: this.canvas.width, canvasHeight: this.canvas.height })
+    );
+
+    this.selectionManager = new SelectionManager(
+      this.ctx,
+      this.Handle_size,
+      this.hitTolerance,
+      this.renderingManager,
+      () => this.existingShapes,
+      () => ({ scale: this.scale, panX: this.panX, panY: this.panY }),
+      () => this.existingPaths,
+      (x, y) => this.getUpdatedMouseCoords(x, y),
+      (x, y) => this.getMousePixelCoords(x, y),
+      this.collaborationManager
+    );
+
+    this.drawingManager = new DrawingManager(
+      this.ctx,
+      () => this.selectedColor,
+      () => this.strokeWidth,
+      () => this.selectedTool,
+      this.renderingManager,
+      this.collaborationManager,
+      (x, y) => this.getUpdatedMouseCoords(x, y),
+      () => this.existingShapes,
+    );
+
     this.init();
-    this.initHandlers();
+
     this.mouseHandlers();
 
   }
@@ -136,9 +176,13 @@ export class Game {
     }
 
 
-    this.commandManager = new CommandManager(this.existingShapes, () => this.clearCanvas());
+    this.commandManager = new CommandManager(this.existingShapes, () => this.renderingManager.clearCanvas());
 
-    this.clearCanvas();
+    this.renderingManager.clearCanvas();
+  }
+
+  clearCanvas() {
+    this.renderingManager.clearCanvas();
   }
 
   getDBPromise(): IDBPDatabase<SketchDB> {
@@ -148,10 +192,10 @@ export class Game {
 
   setTool(tool: Tool) {
 
-
-    if (this.selectionState.selectedShape) {
-      this.selectionState.selectedShape = null;
-      this.clearCanvas()
+    const selectedShape = this.selectionManager.getSelectedShape()
+    if (selectedShape) {
+      this.selectionManager.setSelectedShape(null);
+      this.renderingManager.clearCanvas();
     }
 
 
@@ -162,8 +206,9 @@ export class Game {
     this.selectedColor = color.hex;
     this.ctx.strokeStyle = color.hex;
 
-    if (this.selectionState.selectedShape) {
-      const index = this.existingShapes.findIndex((shape) => shape.getShapeId() === this.selectionState.selectedShape!.getShapeId());
+    const selectedShape = this.selectionManager.getSelectedShape();
+    if (selectedShape) {
+      const index = this.existingShapes.findIndex((shape) => shape.getShapeId() === selectedShape.getShapeId());
 
       if (index !== -1 && this.existingShapes[index]) {
         const previousState = this.existingShapes[index].serialize();
@@ -173,8 +218,8 @@ export class Game {
           this.commandManager.modify(this.existingShapes[index], previousState);
         }
 
-        await this.updateStore(this.existingShapes[index], "shapeUpdate");
-        this.clearCanvas();
+        await this.collaborationManager.updateStore(this.existingShapes[index], "shapeUpdate", this.dbPromise);
+        this.renderingManager.clearCanvas();
       }
     }
   }
@@ -191,7 +236,7 @@ export class Game {
       this.ctx.strokeStyle = this.selectedColor;
     }
 
-    this.clearCanvas()
+    this.renderingManager.clearCanvas();
 
   }
 
@@ -212,79 +257,6 @@ export class Game {
 
   }
 
-  initHandlers() {
-    console.log('Initializing WebSocket handlers');
-    if (this.isOnline && this.socket) {
-
-
-      this.socket.onmessage = async (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          // console.log('Raw incoming message:', event.data);
-          // console.log('Parsed incoming message:', message);
-
-          if (message.type === "session-init") {
-            // console.log('Received session-init message:', message);
-            this.sessionId = message.sessionId;
-            // console.log('Session ID set to:', this.sessionId);
-            return;
-          }
-
-          if (message.type === "chat") {
-            const shapeData = JSON.parse(message.message)
-            const shape = ShapeFactory.createShapeFromData(shapeData)
-            this.existingShapes.push(shape);
-            this.clearCanvas();
-          }
-          if (message.type === "mouseMovement") {
-            const { setMousePosition } = useMouseStore.getState();
-            const screenX = message.x * this.scale + this.panX;  //world coord --> screen coord
-            const screenY = message.y * this.scale + this.panY;
-            setMousePosition(message.userId, screenX, screenY);
-          }
-
-          if (message.type === 'shapeUpdate') {
-            const updatedShape = JSON.parse(message.message);
-            const shape = ShapeFactory.createShapeFromData(updatedShape)
-
-
-            const i = this.existingShapes.findIndex(shape => shape.getShapeId() === updatedShape.id);
-
-            if (i !== -1) {
-              this.existingShapes[i] = shape
-            } else {
-              this.existingShapes.push(shape)
-
-            }
-            this.clearCanvas();
-          }
-
-          if (message.type === 'shapeDelete') {
-            const shapeId = message.shapeId;
-            const index = this.existingShapes.findIndex(s => s.getShapeId() === shapeId);
-            if (index !== -1) {
-              this.existingShapes.splice(index, 1);
-              this.clearCanvas();
-            }
-          } else if (message.type === 'shapePreview') {
-            const previewShape = JSON.parse(message.message);
-
-
-            if (message.previewType === 'modification') {
-              this.existingShapes = this.existingShapes.filter(
-                shape => shape.getShapeId() !== previewShape.id
-              );
-            }
-
-            this.clearCanvas();
-            this.drawAllShapes(previewShape);
-          }
-        } catch (error) {
-          console.error('Error handling WebSocket message:', error);
-        }
-      };
-    }
-  }
 
   undo = async () => {
     if (this.commandManager) {
@@ -295,15 +267,16 @@ export class Game {
 
         if (action.action === 'add') {
           const tempShape = ShapeFactory.createShapeFromData(action.shapeData);
-          await this.updateStore(tempShape, 'shapeDelete');
+          await this.collaborationManager.updateStore(tempShape, 'shapeDelete', this.dbPromise);
         } else if (action.action === 'delete' && shape) {
-          await this.updateStore(shape, 'chat');
+          await this.collaborationManager.updateStore(shape, 'chat', this.dbPromise);
         } else if (action.action === 'modify' && shape) {
-          await this.updateStore(shape, 'shapeUpdate');
+          await this.collaborationManager.updateStore(shape, 'shapeUpdate', this.dbPromise);
+
         }
       }
-      this.selectionState.selectedShape = null;
-      this.clearCanvas();
+      this.selectionManager.setSelectedShape(null);
+      this.renderingManager.clearCanvas();
     }
 
   }
@@ -317,17 +290,18 @@ export class Game {
         const shape = this.existingShapes.find(s => s.getShapeId() === action.shapeId);
 
         if (action.action === 'add' && shape) {
-          await this.updateStore(shape, 'chat');
+          await this.collaborationManager.updateStore(shape, 'chat', this.dbPromise);
         } else if (action.action === 'delete') {
+
           const tempShape = ShapeFactory.createShapeFromData(action.shapeData);
-          await this.updateStore(tempShape, 'shapeDelete');
+          await this.collaborationManager.updateStore(tempShape, 'shapeDelete', this.dbPromise);
         } else if (action.action === 'modify' && shape) {
-          await this.updateStore(shape, 'shapeUpdate');
+          await this.collaborationManager.updateStore(shape, 'shapeUpdate', this.dbPromise);
         }
       }
 
-      this.selectionState.selectedShape = null;
-      this.clearCanvas();
+      this.selectionManager.setSelectedShape(null);
+      this.renderingManager.clearCanvas();
     }
 
 
@@ -387,11 +361,11 @@ export class Game {
 
       if (e.key === "Backspace") {
         this.textRenderer.deleteLetter();
-        this.clearCanvas();
+        this.renderingManager.clearCanvas();
       } else
         //@ts-ignore
         if (this.isWritableKey(e.key)) {
-          this.clearCanvas();
+          this.renderingManager.clearCanvas();
 
 
           this.textRenderer.startTextInput({
@@ -422,118 +396,7 @@ export class Game {
     }
   }
 
-  getResizeHandlers = (bounds: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }) => {
 
-    const handleSize = this.Handle_size / this.scale;
-    const halfHandle = handleSize / 2
-
-    const handles = [
-      {
-        type: "top-left",
-        x: bounds.x - halfHandle,
-        y: bounds.y - halfHandle,
-      },
-      {
-        type: "top-right",
-        x: bounds.x + bounds.width - halfHandle,
-        y: bounds.y - halfHandle,
-      },
-      {
-        type: "bottom-left",
-        x: bounds.x - halfHandle,
-        y: bounds.y + bounds.height - halfHandle,
-      },
-      {
-        type: "bottom-right",
-        x: bounds.x + bounds.width - halfHandle,
-        y: bounds.y + bounds.height - halfHandle,
-      },
-    ];
-
-    return handles
-
-  }
-
-
-
-  getBoundingBox = (shape: BaseShape) => {
-    const { x, y, width, height } = shape.getBounds();
-    const gap = 10;
-
-    const normalizedX = width < 0 ? x + width : x;
-    const normalizedY = height < 0 ? y + height : y;
-    const normalizedWidth = Math.abs(width);
-    const normalizedHeight = Math.abs(height);
-
-    const path = new Path2D();
-    path.rect(
-      normalizedX - gap,
-      normalizedY - gap,
-      normalizedWidth + gap * 2,
-      normalizedHeight + gap * 2
-    );
-
-    return {
-      path,
-      bounds: {
-        x: normalizedX - gap,
-        y: normalizedY - gap,
-        width: normalizedWidth + gap * 2,
-        height: normalizedHeight + gap * 2
-      }
-    };
-  }
-
-  handleShapeSelectionMouseDown = (e: MouseEvent) => {
-    const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY)
-    const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
-    const resizeHandle = this.checkIfHandleAtPoint(x, y);
-    if (this.selectionState.selectedShape && resizeHandle !== null) {
-      this.selectionState.isResizing = true;
-      this.selectionState.resizeHanle = resizeHandle;
-      this.selectionState.dragStartX = x;
-      this.selectionState.dragStartY = y;
-      this.selectionState.previousState = this.selectionState.selectedShape.serialize();
-      console.log('inside the handleShapeSelectionMouseDown')
-    } else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.getBoundingBox(this.selectionState?.selectedShape).path, pixelX, pixelY)) {
-      console.log('is inside the bounding box')
-      this.selectionState.isDraggin = true;
-      this.selectionState.dragStartX = x;
-      this.selectionState.dragStartY = y;
-      this.selectionState.previousState = this.selectionState.selectedShape.serialize(); //state before modificatoin
-
-    } else {
-      console.log('is outside the bounding box')
-      this.selectionState.selectedShape = null
-      this.selectionState.isDraggin = false;
-      this.selectionState.resizeHanle = null;
-      this.selectionState.dragStartX = 0;
-      this.selectionState.dragStartY = 0;
-
-      this.clearCanvas()
-
-    }
-
-    if (this.isHovering && this.selectionState.selectedShape) {
-      this.drawBoundingBox(this.selectionState.selectedShape)
-
-    }
-  }
-
-
-  private themeBasedColorAdapter = (color: string): string => {
-    if (this.currentTheme === "#ffffff" && color === "#d3d3d3")
-      return "#1f1f1f"
-    if (this.currentTheme === "#0d0c09" && color === "#1f1f1f")
-      return "#d3d3d3"
-
-    return color;
-  }
 
   handleMouseDown = (e: MouseEvent) => {
     this.clicked = true;
@@ -542,11 +405,16 @@ export class Game {
     this.startY = y;
 
     if (this.selectedTool === "eraser") {
-      this.selectionState.isDraggin = true;
+      this.isEraserDragging = true;
     }
 
     if (this.selectedTool === "pointer") {
-      this.handleShapeSelectionMouseDown(e)
+      this.selectionManager.handleShapeSelectionMouseDown(e)
+    }
+
+    const drawingTools = ["rect", "ellipse", "line", "diamond", "arrow"];
+    if (drawingTools.includes(this.selectedTool)) {
+      this.drawingManager.setStartPosition(x, y);
     }
 
     if (this.selectedTool === "pencil" && this.clicked === true) {
@@ -558,10 +426,6 @@ export class Game {
       this.existingShapes.push(shape);
     }
 
-
-
-
-
     if (this.selectedTool === "text" && this.clicked === true) {
       this.isTyping = true;
 
@@ -571,34 +435,13 @@ export class Game {
 
   };
 
-  private updateStore = async (shapeData: BaseShape, opt: 'shapeUpdate' | 'chat' | 'shapeDelete') => {
-    const serialized = shapeData.serialize();
-
-    if (!this.isOnline) {
-      await saveShape(this.dbPromise, serialized);
-    }
-
-
-
-    if (this.isOnline && this.socket) {
-      this.socket.send(JSON.stringify({
-        type: opt,
-        roomId: this.roomId,
-        message: opt !== "shapeDelete" ? JSON.stringify(shapeData.serialize()) : null,
-        shapeId: shapeData.getShapeId(),
-        sessionId: this.sessionId,
-        shapeType: shapeData.constructor.name.toLowerCase(),
-      }));
-    }
-  }
-
-
 
   handleMouseUp = async (e: MouseEvent) => {
     this.clicked = false;
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY);
+
     if (this.selectedTool === "eraser") {
-      this.selectionState.isDraggin = false;
+      this.isEraserDragging = false;
 
       if (this.shapesToDelete.size > 0) {
 
@@ -639,382 +482,66 @@ export class Game {
           });
         }
 
-        this.clearCanvas()
+        this.renderingManager.clearCanvas();
       }
-
+      return;
     }
 
-    if (this.selectionState.isDraggin || this.selectionState.isResizing) {
-      if (this.selectionState.selectedShape && this.selectionState.previousState) {
-        const currentState = this.selectionState.selectedShape.serialize();
+    if (this.selectionManager.isDragging() || this.selectionManager.isResizing()) {
+      const selectedShape = this.selectionManager.getSelectedShape();
+      const previousState = this.selectionManager.getPreviousState();
 
-        const hasChanged = JSON.stringify(currentState) !== JSON.stringify(this.selectionState.previousState);
+      if (selectedShape && previousState) {
+        const currentState = selectedShape.serialize();
+
+        const hasChanged = JSON.stringify(currentState) !== JSON.stringify(previousState);
 
         if (hasChanged) {
-          await this.updateStore(this.selectionState.selectedShape, 'shapeUpdate');
+          await this.collaborationManager.updateStore(selectedShape, 'shapeUpdate', this.dbPromise);
 
           if (this.commandManager) {
-            this.commandManager.modify(this.selectionState.selectedShape, this.selectionState.previousState);
+            this.commandManager.modify(selectedShape, previousState);
           }
         }
       }
-      this.selectionState.isDraggin = false;
-      this.selectionState.isResizing = false;
-      this.selectionState.resizeHanle = null;
-      this.selectionState.previousState = null;
+      this.selectionManager.resetDragResizeState();
+      return;
     }
 
 
-    let inputShape: BaseShape | null = null;
-
-    switch (this.selectedTool) {
-      case "rect":
-        inputShape = new Rect(
-          this.startX,
-          this.startY,
-          canvasCoords.x - this.startX,
-          canvasCoords.y - this.startY,
-          this.selectedColor,
-          this.strokeWidth
-        );
-        break;
-
-      case "ellipse":
-        const width = canvasCoords.x - this.startX;
-        const height = canvasCoords.y - this.startY;
-        inputShape = new Ellipse(
-          this.startX + width / 2,
-          this.startY + height / 2,
-          Math.abs(width / 2),
-          Math.abs(height / 2),
-          this.selectedColor,
-          this.strokeWidth
-        );
-        break;
-
-
-      case "line":
-        inputShape = new Line(
-          this.startX,
-          this.startY,
-          canvasCoords.x,
-          canvasCoords.y,
-          this.selectedColor,
-          this.strokeWidth
-        );
-        break;
-
-
-
-      case "pencil":
-        inputShape = this.existingShapes[this.existingShapes.length - 1]  //last shape as Shape
-        break;
-
-      case "diamond":
-        const widthh = canvasCoords.x - this.startX
-        const heighth = canvasCoords.y - this.startY
-        inputShape = new Diamond(
-          this.startX + widthh / 2,
-          this.startY + heighth / 2,
-          Math.abs(widthh / 2),
-          Math.abs(heighth / 2),
-          this.selectedColor,
-          this.strokeWidth
-
-
-        )
-        break;
-
-      case "arrow":
-        inputShape = new Arrow(
-          this.startX,
-          this.startY,
-          canvasCoords.x,
-          canvasCoords.y,
-          this.selectedColor,
-          this.strokeWidth
-        );
-        break;
-
-    }
-    if (inputShape) {
+    const newShape = this.drawingManager.createShape(e);
+    if (newShape) {
       if (this.selectedTool !== "pencil") {
-        this.existingShapes.push(inputShape);
+        this.existingShapes.push(newShape);
       }
 
-      const bounds = inputShape.getBounds();
+      const bounds = newShape.getBounds();
       const hasSize = Math.abs(bounds.width) > 1 || Math.abs(bounds.height) > 1;
 
       if (this.commandManager && hasSize) {
-        this.commandManager.add(inputShape);
+        this.commandManager.add(newShape);
       }
-
-      this.updateStore(inputShape, 'chat')
-      this.clearCanvas();
+      await this.collaborationManager.updateStore(newShape, 'chat', this.dbPromise);
+      this.renderingManager.clearCanvas();
     }
   };
-
-
-
-  private mouseHoverDetection = async (e: MouseEvent) => {
-
-    const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
-    const { cursorType, setCursorType } = useCursorType.getState();
-
-    const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
-
-    if (this.selectionState.selectedShape) {
-      const handleType = this.checkIfHandleAtPoint(x, y);
-      if (handleType !== null) {
-        // console.log('pointing ot hanle ',handleType)
-        let cursor = 'cursor-default';
-        switch (handleType) {
-          case 'top-left':
-          case 'bottom-right':
-            cursor = "cursor-nw-resize"
-            break;
-          case 'top-right':
-          case 'bottom-left':
-            cursor = "cursor-ne-resize"
-            break;
-
-          default:
-            break;
-        }
-        if (cursorType !== cursor) {
-          setCursorType(cursor)
-        }
-        return;
-      }
-    }
-
-
-
-    this.isHovering = false;
-    this.ctx.save();
-    const hitLineWidth = this.hitTolerance / this.scale;
-    this.ctx.lineWidth = hitLineWidth;
-    Object.entries(this.existingPaths).forEach(([id, path]) => {
-      if (this.ctx.isPointInStroke(path, pixelX, pixelY)) {
-        this.isHovering = true;
-        this.selectionState.selectedShape = this.existingShapes.find(shape => shape.getShapeId() === id) ?? null;
-      }
-    })
-    this.ctx.restore();
-
-    const nextCursor = this.isHovering ? 'cursor-move' : 'cursor-default';
-
-    if (cursorType !== nextCursor) {
-      setCursorType(nextCursor);
-    }
-  };
-
-  checkIfHandleAtPoint = (x: number, y: number) => {
-    if (!this.selectionState.selectedShape) return null;
-
-    const handlesize = this.Handle_size / this.scale;
-    const { bounds } = this.getBoundingBox(this.selectionState.selectedShape);
-    const handles = this.getResizeHandlers(bounds)
-    for (let handle of handles)
-      if (x >= handle.x && x <= handle.x + handlesize && y >= handle.y && y <= handle.y + handlesize) {
-        return handle.type;
-      }
-    return null;
-
-
-
-  }
-
-  private handleShapeDrag = async (e: MouseEvent) => {
-    if (!this.selectionState.selectedShape) return;
-
-    const { x, y } = await this.getUpdatedMouseCoords(e.clientX, e.clientY);
-    const dx = x - this.selectionState.dragStartX;
-    const dy = y - this.selectionState.dragStartY;
-
-    this.selectionState.selectedShape?.drag(dx, dy)
-
-    this.selectionState.dragStartX = x
-    this.selectionState.dragStartY = y
-
-    if (this.isOnline && this.socket && this.roomId) {
-
-      sendShapePreview(this.socket, this.selectionState.selectedShape?.serialize(), this.roomId, 'modification', this.sessionId!)
-    }
-    this.clearCanvas()
-
-
-  }
-
-  handleShapeResize = (e: MouseEvent) => {
-    const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY);
-    const dx = x - this.selectionState.dragStartX;
-    const dy = y - this.selectionState.dragStartY;
-
-    const bounds = this.selectionState.selectedShape?.getBounds()
-    if (!bounds) return
-
-    switch (this.selectionState.resizeHanle) {
-      case 'top-left':
-        this.selectionState.selectedShape?.resize(bounds.x + dx, bounds.y + dy, bounds.width - dx, bounds.height - dy)
-        break;
-      case 'top-right':
-        this.selectionState.selectedShape?.resize(bounds.x, bounds.y + dy, bounds.width + dx, bounds.height - dy)
-        break
-      case 'bottom-left':
-        this.selectionState.selectedShape?.resize(bounds.x + dx, bounds.y, bounds.width - dx, bounds.height + dy)
-        break;
-      case 'bottom-right':
-        this.selectionState.selectedShape?.resize(bounds.x, bounds.y, bounds.width + dx, bounds.height + dy)
-        break;
-      default:
-        break;
-
-
-    }
-    this.selectionState.dragStartX = x
-    this.selectionState.dragStartY = y
-
-    this.clearCanvas()
-
-
-  }
-
-  handleDrawingOnMouseMove = (e: MouseEvent) => {
-    const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
-    let previewShape: Shape | null = null;
-
-    switch (this.selectedTool) {
-      case "rect":
-        const rectHeight = canvasCoords.y - this.startY;
-        const rectWidth = canvasCoords.x - this.startX;
-        previewShape = {
-          type: 'rect',
-          x: this.startX,
-          y: this.startY,
-          width: rectWidth,
-          height: rectHeight,
-          color: this.selectedColor,
-          lineWidth: this.strokeWidth
-        };
-        break;
-
-      case "ellipse":
-        const width = canvasCoords.x - this.startX;
-        const height = canvasCoords.y - this.startY;
-        previewShape = {
-          type: 'ellipse',
-          centerX: this.startX + width / 2,
-          centerY: this.startY + height / 2,
-          radiusX: Math.abs(width / 2),
-          radiusY: Math.abs(height / 2),
-          color: this.selectedColor,
-          lineWidth: this.strokeWidth
-        };
-        break;
-
-      case "line":
-        previewShape = {
-          type: 'line',
-          startX: this.startX,
-          startY: this.startY,
-          endX: canvasCoords.x,
-          endY: canvasCoords.y,
-          color: this.selectedColor,
-          lineWidth: this.strokeWidth
-        };
-        break;
-
-      case "pencil":
-        const currentShape = this.existingShapes[this.existingShapes.length - 1];
-        if (currentShape instanceof Pencil) {
-          currentShape.addPoint(canvasCoords.x, canvasCoords.y);
-          this.clearCanvas();
-          currentShape.draw(this.ctx);
-          if (this.isOnline && this.socket && this.roomId) {
-
-            sendShapePreview(this.socket, currentShape.serialize(), this.roomId, 'new', this.sessionId!);
-          }
-        }
-        break;
-
-      case "diamond":
-        const diamondWidth = canvasCoords.x - this.startX;
-        const diamondHeight = canvasCoords.y - this.startY;
-        previewShape = {
-          type: 'diamond',
-          centerX: this.startX + diamondWidth / 2,
-          centerY: this.startY + diamondHeight / 2,
-          radiusX: Math.abs(diamondWidth / 2),
-          radiusY: Math.abs(diamondHeight / 2),
-          color: this.selectedColor,
-          lineWidth: this.strokeWidth
-        };
-        break;
-
-      case "arrow":
-        previewShape = {
-          type: 'arrow',
-          startX: this.startX,
-          startY: this.startY,
-          endX: canvasCoords.x,
-          endY: canvasCoords.y,
-          color: this.selectedColor,
-          lineWidth: this.strokeWidth
-        };
-        break;
-
-      case "panTool":
-        // this.startX  //initial point which we have to maintain with the canvavs by changin the offset so that the point with resp to canvas remains same
-        const dx = e.movementX;
-        const dy = e.movementY;
-        this.panX += dx;
-        this.panY += dy;
-
-
-        // const dx = e.clientX - this.lastPanX;   //dx is the change in the pan
-        // const dy = e.clientY - this.lastPanY;
-        // this.panX += dx;
-        // this.panY += dy;
-
-        // this.lastPanX = e.clientX;
-        // this.lastPanY = e.clientY;
-
-        this.clearCanvas();
-        break;
-    }
-
-    if (previewShape) {
-      this.clearCanvas();
-      this.drawAllShapes(previewShape);
-      if (this.isOnline && this.socket && this.roomId) {
-
-        sendShapePreview(this.socket, previewShape, this.roomId, 'new', this.sessionId!);
-      }
-    }
-  }
-
-
 
 
 
   handleMouseMove = async (e: MouseEvent) => {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
-    if (this.isOnline && this.socket && this.roomId) {
-
-      sendMousePosition(this.socket, canvasCoords.x, canvasCoords.y, this.roomId, this.sessionId!)
-    }
-    if (this.selectedTool === "eraser" && this.selectionState.isDraggin) {
+    this.collaborationManager.sendMousePosition(canvasCoords.x, canvasCoords.y);
+    if (this.selectedTool === "eraser" && this.isEraserDragging) {
       this.hanldeEraser(e)
-    } else if (this.selectedTool === "pointer" && this.selectionState.isResizing) {
-      this.handleShapeResize(e)
-    } else if (this.selectedTool === "pointer" && this.selectionState.isDraggin) {
-      this.handleShapeDrag(e)
+    } else if (this.selectedTool === "pointer" && this.selectionManager.isResizing()) {
+      this.selectionManager.handleShapeResize(e)
+    } else if (this.selectedTool === "pointer" && this.selectionManager.isDragging()) {
+      this.selectionManager.handleShapeDrag(e)
     } else if (this.selectedTool === "pointer") {
-      this.mouseHoverDetection(e)
+      this.selectionManager.mouseHoverDetection(e)
     } else if (this.clicked) {
-      this.handleDrawingOnMouseMove(e)
+      this.drawingManager.handleDrawingOnMouseMove(e)
 
     }
   }
@@ -1036,7 +563,7 @@ export class Game {
           this.shapesToDelete.add(id);
 
           this.existingShapes[shapeIndex].setColor("#b0adadff");
-          this.clearCanvas();
+          this.renderingManager.clearCanvas();
         }
       }
     });
@@ -1046,8 +573,6 @@ export class Game {
   handleMouseWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (e.ctrlKey === true) {
-
-
 
       const zoomFactro = (e.deltaY > 0 ? 0.9 : 1.1);
       const newScale = this.scale * zoomFactro;
@@ -1059,161 +584,10 @@ export class Game {
       this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
 
       this.scale = newScale
-      this.clearCanvas();
+      this.renderingManager.clearCanvas();
 
     }
 
   }
 
-  clearCanvas() {
-    this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    this.ctx.fillStyle = this.currentTheme;
-    this.ctx.fillRect(-this.panX / this.scale, -this.panY / this.scale, this.canvas.width / this.scale, this.canvas.height / this.scale);
-
-    this.ctx.lineWidth = this.strokeWidth / this.scale;
-
-
-    if (this.selectionState.selectedShape) {
-      this.drawBoundingBox(this.selectionState.selectedShape)
-    }
-
-
-
-
-    this.existingShapes.forEach((shape) => {
-      const adaptedColor = this.themeBasedColorAdapter(shape.getColor());
-
-      const originalColor = shape.getColor();
-      shape.setColor(adaptedColor);
-      shape.draw(this.ctx);
-      this.updateShapePath(shape);
-      shape.setColor(originalColor);
-    });
-  }
-
-  drawBoundingBox = (shape: any) => {
-    const handleSize = this.Handle_size / this.scale
-    this.ctx.save()
-    const { path, bounds } = this.getBoundingBox(shape);
-    this.ctx.lineWidth = 1 / this.scale;
-    this.ctx.strokeStyle = this.currentTheme === '#0d0c09' ? '#b2aeff' : '#3029e6ff';
-
-    this.ctx.stroke(path);
-
-    this.ctx.restore();
-
-    this.ctx.save();
-    if (this.currentTheme === "#0d0c09") {
-
-      this.ctx.fillStyle = '#0d0c09';
-    } else {
-      this.ctx.fillStyle = '#ffffff';
-
-    }
-    this.ctx.lineWidth = 1 / this.scale;
-    this.ctx.strokeStyle = this.currentTheme === '#0d0c09' ? '#b2aeff' : '#3029e6ff';
-
-
-
-    const handlers = this.getResizeHandlers(bounds)
-    handlers.forEach(handle => {
-      this.ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
-      this.ctx.strokeRect(handle.x, handle.y, handleSize, handleSize);
-
-    })
-
-    this.ctx.restore();
-
-  }
-
-  drawAllShapes = (shape: Shape) => {
-    const adaptedColor = this.themeBasedColorAdapter(shape.color);
-
-    const adaptedShape = { ...shape, color: adaptedColor };
-
-    switch (adaptedShape.type) {
-      case 'rect':
-        this.shapeRenderer.drawRect(adaptedShape);
-        break;
-
-      case 'ellipse':
-        this.shapeRenderer.drawEllipse(adaptedShape);
-        break;
-
-      case 'line':
-        this.shapeRenderer.drawLine(adaptedShape);
-        break;
-
-      case 'pencil':
-        this.shapeRenderer.drawPencil(adaptedShape);
-        break;
-
-      case 'diamond':
-        this.shapeRenderer.drawDiamond(adaptedShape);
-        break;
-      case 'arrow':
-        this.shapeRenderer.drawArrow(adaptedShape);
-        break;
-
-      default:
-        break;
-    }
-  }
-
-
-
-
-  updateShapePath = (unSerializedShape: BaseShape) => {
-    const shape = unSerializedShape.serialize()
-    const path = new Path2D;
-
-
-    switch (shape.type) {
-      case 'rect':
-        path.rect(shape.x, shape.y, shape.width, shape.height);
-
-        break;
-
-      case 'ellipse':
-        path.ellipse(shape.centerX, shape.centerY, shape.radiusX, shape.radiusY, 0, 0, Math.PI * 2);
-        break;
-
-      case 'line':
-        path.moveTo(shape.startX, shape.startY);
-        path.lineTo(shape.endX, shape.endY);
-        break;
-
-      case 'pencil':
-        if (shape.points && shape.points.length > 1) {
-          path.moveTo(shape.points[0].x, shape.points[0].y);
-          for (let i = 1; i < shape.points.length; i++) {
-            path.lineTo(shape.points[i].x, shape.points[i].y);
-          }
-        }
-        break;
-      case 'diamond':
-        path.moveTo(shape.centerX, shape.centerY - shape.radiusY);
-        path.lineTo(shape.centerX + shape.radiusX, shape.centerY);
-        path.lineTo(shape.centerX, shape.centerY + shape.radiusY);
-        path.lineTo(shape.centerX - shape.radiusX, shape.centerY);
-        path.closePath();
-        break;
-
-      case 'arrow':
-        path.moveTo(shape.startX, shape.startY);
-        path.lineTo(shape.endX, shape.endY);
-        break;
-
-      default:
-        break;
-    }
-    if (shape.id) {
-      this.existingPaths[shape.id] = path;
-
-    }
-
-
-  }
 }
