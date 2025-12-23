@@ -1,10 +1,14 @@
-import { BaseShape } from "../BaseShape";
+import { BaseShape } from "./BaseShape";
+import { TEXT_CONFIG } from "../config/textConfig";
+
 
 export class TextShape extends BaseShape {
   private textContent: string;
-  private startX: number;
-  private startY: number;
-  private maxWidth: number;
+  startX: number;
+  startY: number;
+  private noOfLines: number;
+  private lineHeight: number;
+  private fontSize: number;
 
   constructor(
     startX: number,
@@ -12,39 +16,30 @@ export class TextShape extends BaseShape {
     color: string,
     lineWidth: number,
     textContent: string = "",
-    maxWidth: number = 200
+    fontSize: number = TEXT_CONFIG.FONT_SIZE,
+    id?: string
   ) {
-    super(color, lineWidth);
+    super(id, color, lineWidth);
     this.startX = startX;
     this.startY = startY;
     this.textContent = textContent;
-    this.maxWidth = maxWidth;
+    this.fontSize = fontSize;
+    this.noOfLines = (textContent.match(/\n/g) || []).length + 1;
+    this.lineHeight = this.fontSize * TEXT_CONFIG.LINE_HEIGHT;
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
-    ctx.strokeStyle = this.getColor();
-    ctx.lineWidth = this.getLineWidth();
-    ctx.font = `${this.getLineWidth() * 2}px Arial`;
-    ctx.fillStyle = this.getColor();
-    ctx.fillText(this.textContent, this.startX, this.startY);
-    ctx.restore();
-  }
+    ctx.fillStyle = this.color;
+    ctx.font = `${TEXT_CONFIG.FONT_WEIGHT} ${this.fontSize}px ${TEXT_CONFIG.FONT_FAMILY}`;
+    const lines = this.textContent.split('\n');
+    this.noOfLines = lines.length;
+    this.lineHeight = this.fontSize * TEXT_CONFIG.LINE_HEIGHT;
 
-  isPointInside(x: number, y: number): boolean {
-    const ctx = document.createElement("canvas").getContext("2d");
-    if (!ctx) return false;
-    
-    ctx.font = `${this.getLineWidth() * 2}px Arial`;
-    const metrics = ctx.measureText(this.textContent);
-    const height = this.getLineWidth() * 2;
-    
-    return (
-      x >= this.startX &&
-      x <= this.startX + metrics.width &&
-      y >= this.startY - height &&
-      y <= this.startY
-    );
+    lines.forEach((line, index) => {
+      ctx.fillText(line, this.startX, this.startY + this.fontSize + (index * this.lineHeight));
+    });
+    ctx.restore();
   }
 
   drag(dx: number, dy: number): void {
@@ -52,19 +47,26 @@ export class TextShape extends BaseShape {
     this.startY += dy;
   }
 
-  getBoundingBox(): { x: number; y: number; width: number; height: number } {
-    const ctx = document.createElement("canvas").getContext("2d");
-    if (!ctx) return { x: 0, y: 0, width: 0, height: 0 };
-    
-    ctx.font = `${this.getLineWidth() * 2}px Arial`;
-    const metrics = ctx.measureText(this.textContent);
-    const height = this.getLineWidth() * 2;
-    
+  getBounds(): { x: number; y: number; width: number; height: number } {
+
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    ctx.font = `${TEXT_CONFIG.FONT_WEIGHT} ${this.fontSize}px ${TEXT_CONFIG.FONT_FAMILY}`;
+
+    const lines = this.textContent.split('\n');
+
+    let maxWidth = 100;
+    lines.forEach(line => {
+      const metrics = ctx.measureText(line);
+      if (metrics.width > maxWidth) {
+        maxWidth = metrics.width;
+      }
+    });
+
     return {
       x: this.startX,
-      y: this.startY - height,
-      width: metrics.width,
-      height: height
+      y: this.startY,
+      width: maxWidth,
+      height: this.noOfLines * this.lineHeight
     };
   }
 
@@ -74,18 +76,44 @@ export class TextShape extends BaseShape {
       textContent: this.textContent,
       startX: this.startX,
       startY: this.startY,
-      maxWidth: this.maxWidth,
+      fontSize: this.fontSize,
       color: this.getColor(),
       lineWidth: this.getLineWidth(),
       id: this.getShapeId()
     };
   }
 
-  setText(text: string): void {
-    this.textContent = text;
+  setText(newText: string) {
+    this.textContent = newText;
+    this.noOfLines = (newText.match(/\n/g) || []).length + 1;
+    this.lineHeight = this.fontSize * TEXT_CONFIG.LINE_HEIGHT;
   }
 
   getText(): string {
     return this.textContent;
+  }
+
+  getTypography() {
+    return {
+      fontSize: this.fontSize,
+      color: this.color,
+      fontWeight: TEXT_CONFIG.FONT_WEIGHT,
+      fontFamily: TEXT_CONFIG.FONT_FAMILY,
+      noOfLines: this.noOfLines,
+      lineHeight: this.lineHeight
+    };
+  }
+
+  resize(x: number, y: number, width: number, height: number): void {
+
+    const originalHeight = this.noOfLines * this.lineHeight;
+    if (originalHeight > 0) {
+      const scale = height / originalHeight;
+      this.fontSize = Math.max(8, Math.min(200, this.fontSize * scale));
+      this.lineHeight = this.fontSize * TEXT_CONFIG.LINE_HEIGHT;
+    }
+
+    this.startX = x;
+    this.startY = y;
   }
 } 

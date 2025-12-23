@@ -77,5 +77,6 @@ export class Pencil extends BaseShape {
 
     resize(x: number, y: number, width: number, height: number): void {
 
+
     }
 }

@@ -75,9 +75,7 @@ async function handleShapeUpdateDb(parsedMessage: parsedMessage) {
 
 async function handleShapeDeleteDb(parsedMessage: parsedMessage) {
     try {
-        console.log('[Worker] Attempting to delete shape:', parsedMessage.shapeId, 'from room:', parsedMessage.roomId);
-
-        const result = await prisma.chat.delete({
+        await prisma.chat.delete({
             where: {
                 roomId_shapeId: {
                     roomId: parsedMessage.roomId,
@@ -86,9 +84,9 @@ async function handleShapeDeleteDb(parsedMessage: parsedMessage) {
             }
         });
 
-        console.log('[Worker] Successfully deleted shape:', parsedMessage.shapeId);
+
     } catch (error) {
-        console.error('[Worker] Error deleting shape:', parsedMessage.shapeId, error);
+
     }
 }
 

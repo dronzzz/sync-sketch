@@ -8,6 +8,7 @@ import { CollaborationManager } from "./CollaborationManager";
 
 interface SelectionState {
     selectedShape: BaseShape | null,
+    selectedShapeWithBounds: BaseShape | null,
     isDraggin: boolean,
     dragStartX: number,
     dragStartY: number,
@@ -25,6 +26,7 @@ export class SelectionManager {
     private renderingManager: RenderingManager;
     private selectionState: SelectionState = {
         selectedShape: null,
+        selectedShapeWithBounds: null,
         isDraggin: false,
         dragStartX: 0,
         dragStartY: 0,
@@ -62,7 +64,7 @@ export class SelectionManager {
 
         const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
 
-        const selectedShape = this.selectionState.selectedShape;
+        const selectedShape = this.selectionState.selectedShapeWithBounds;
         const existingPaths = this.getExistingPaths();
 
 
@@ -205,7 +207,8 @@ export class SelectionManager {
 
         } else {
             console.log('is outside the bounding box')
-            this.selectionState.selectedShape = null
+            this.selectionState.selectedShape = null;
+            this.selectionState.selectedShapeWithBounds = null;
             this.selectionState.isDraggin = false;
             this.selectionState.resizeHanle = null;
             this.selectionState.dragStartX = 0;
@@ -216,6 +219,8 @@ export class SelectionManager {
         }
 
         if (this.isHovering && this.selectionState.selectedShape) {
+
+            this.selectionState.selectedShapeWithBounds = this.selectionState.selectedShape;
             this.renderingManager.drawBoundingBox(this.selectionState.selectedShape)
 
         }
@@ -226,10 +231,19 @@ export class SelectionManager {
         return this.selectionState;
     }
     getSelectedShape = () => {
-        return this.selectionState.selectedShape;
+        return this.selectionState.selectedShape || this.selectionState.selectedShapeWithBounds;
     }
+
+    getSelectedShapeWithBounds = () => {
+        return this.selectionState.selectedShapeWithBounds;
+    }
+
     setSelectedShape = (shape: BaseShape | null) => {
         this.selectionState.selectedShape = shape;
+    }
+
+    setSelectedShapeWithBounds = (shape: BaseShape | null) => {
+        this.selectionState.selectedShapeWithBounds = shape;
     }
 
     isResizing() {

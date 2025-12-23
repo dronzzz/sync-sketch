@@ -56,10 +56,9 @@ export interface Pencil extends baseShape {
 export interface TextInput extends baseShape {
     type: "text",
     textContent: string;
-    startX: number;   //startX
-    startY: number;    //startY
-    maxWidth: number;
-    font?: number;
+    startX: number;
+    startY: number;
+    fontSize?: number;
 }
 
 

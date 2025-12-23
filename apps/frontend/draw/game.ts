@@ -1,7 +1,7 @@
 import { Tool } from "@/components/Canvas";
 import { getExistingShapes } from "./http";
 import { Shape } from "./types";
-import { TextRenderer } from "./textRenderer";
+import { TextShape } from "./shapes/TextShape";
 import { useCursorType, useMouseStore } from "@/store/useMouseStore";
 import { BaseShape } from "./shapes/BaseShape";
 import { ShapeFactory } from "./utils/ShapeFactory";
@@ -13,6 +13,7 @@ import { RenderingManager } from "./RenderingManager";
 import { SelectionManager } from "./SelectionManager";
 import { DrawingManager } from "./DrawingManager";
 import { CollaborationManager } from "./CollaborationManager";
+import { TEXT_CONFIG } from "./config/textConfig";
 
 
 export class Game {
@@ -25,13 +26,13 @@ export class Game {
   private startY: number = 0;
   private socket: WebSocket | null;
   private selectedTool: Tool = "panTool";
-  private textRenderer: TextRenderer;
   private scale: number = 1;
   private panX: number = 0;
   private panY: number = 0;
   private isTyping: boolean;
   private selectedColor: string;
   private currentTheme: string;
+  private editingTextId: string | null = null;
   private existingPaths: { [key: string]: Path2D }
   private strokeWidth: number = 5;
   private Handle_size: number = 8;
@@ -53,12 +54,13 @@ export class Game {
     this.sessionId = id;
   }
 
-  constructor(canvas: HTMLCanvasElement, socket?: WebSocket | null, roomId?: string | null, theme?: string) {
+  constructor(canvas: HTMLCanvasElement, socket?: WebSocket | null, roomId?: string | null, theme?: string,
+    private setTextAreaForEditing?: (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => void
+  ) {
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d")!;
     this.existingShapes = [];
     this.existingPaths = {}
-    this.textRenderer = new TextRenderer(this.ctx)
     this.clicked = false;
     this.isTyping = false;
     this.socket = socket || null;
@@ -119,8 +121,9 @@ export class Game {
       () => ({ scale: this.scale, panX: this.panX, panY: this.panY }),
       () => this.existingShapes,
       () => this.existingPaths,
-      () => this.selectionManager.getSelectedShape(),
-      () => ({ canvasWidth: this.canvas.width, canvasHeight: this.canvas.height })
+      () => this.selectionManager.getSelectedShapeWithBounds(),
+      () => ({ canvasWidth: this.canvas.width, canvasHeight: this.canvas.height }),
+      () => this.getEditingTextId()
     );
 
     this.selectionManager = new SelectionManager(
@@ -189,6 +192,57 @@ export class Game {
     return this.dbPromise;
   }
 
+  getScale(): number {
+    return this.scale;
+  }
+
+  getEditingTextId(): string | null {
+    return this.editingTextId;
+  }
+
+  EditingText(e: MouseEvent) {
+    if (this.selectionManager.getSelectedShape() instanceof TextShape) {
+      const textShape = this.selectionManager.getSelectedShape() as TextShape;
+      const typography = textShape.getTypography();
+      const textid = textShape.getShapeId();
+
+
+      this.editingTextId = textid;
+      this.renderingManager.clearCanvas();
+
+      const pixelX = (textShape.startX * this.scale) + this.panX;
+      const pixelY = ((textShape.startY + typography.fontSize * 0.08) * this.scale) + this.panY;
+      const bounds = textShape.getBounds();
+      const textWidth = bounds.width * this.scale;
+
+      this.setTextAreaForEditing?.(
+        textShape.getText(),
+        pixelX,
+        pixelY,
+        textid,
+        this.scale,
+        typography.fontSize,
+        textWidth
+      );
+    }
+
+  }
+
+  UpdateText(id: string, text: string) {
+    const textShape = this.existingShapes.find(s => s.getShapeId() === id);
+    if (textShape instanceof TextShape) {
+
+      const previousState = textShape.serialize();
+      textShape.setText(text);
+      this.commandManager?.modify(textShape, previousState);
+      this.collaborationManager.updateStore(textShape, 'shapeUpdate', this.dbPromise);
+      this.editingTextId = null;
+      this.renderingManager.clearCanvas();
+    }
+
+
+  }
+
 
   setTool(tool: Tool) {
 
@@ -206,7 +260,9 @@ export class Game {
     this.selectedColor = color.hex;
     this.ctx.strokeStyle = color.hex;
 
-    const selectedShape = this.selectionManager.getSelectedShape();
+    const selectedShape = this.selectionManager.getSelectedShapeWithBounds();
+    console.log('setColor called - selected shape WITH BOUNDS:', selectedShape?.getShapeId(), 'color:', color.hex);
+
     if (selectedShape) {
       const index = this.existingShapes.findIndex((shape) => shape.getShapeId() === selectedShape.getShapeId());
 
@@ -351,37 +407,6 @@ export class Game {
   }
   handleKeys = async (e: KeyboardEvent) => {
 
-    if (this.selectedTool === "text" && this.isTyping === true) {
-      e.preventDefault();
-
-      if (e.key === "Enter" || e.key === "Escape") {
-        this.isTyping = false;
-        this.textRenderer.stopTextInput();
-      }
-
-      if (e.key === "Backspace") {
-        this.textRenderer.deleteLetter();
-        this.renderingManager.clearCanvas();
-      } else
-        //@ts-ignore
-        if (this.isWritableKey(e.key)) {
-          this.renderingManager.clearCanvas();
-
-
-          this.textRenderer.startTextInput({
-            type: "text",
-            textContent: e.key,
-            startX: this.startX,
-            startY: this.startY,
-            maxWidth: Math.abs(2 * this.startX - this.canvas.width),
-            lineWidth: this.strokeWidth,
-            color: this.selectedColor
-          })
-        }
-
-
-    }
-
 
     if (e.ctrlKey && e.key === "z") {
 
@@ -394,6 +419,27 @@ export class Game {
       e.preventDefault();
       this.redo();
     }
+  }
+
+  createText(position: { x: number; y: number }, text: string) {
+    if (!text || text.trim() === '') return;
+
+    const canvasCoords = this.getUpdatedMouseCoords(position.x, position.y);
+
+    const fontSize = TEXT_CONFIG.FONT_SIZE * this.scale;
+
+    const textShape = new TextShape(
+      canvasCoords.x,
+      canvasCoords.y,
+      this.selectedColor,
+      this.strokeWidth,
+      text,
+      fontSize
+    );
+    this.existingShapes.push(textShape);
+    this.commandManager?.add(textShape);
+    this.collaborationManager?.updateStore(textShape, 'chat', this.dbPromise);
+    this.renderingManager.clearCanvas();
   }
 
 
@@ -427,7 +473,7 @@ export class Game {
     }
 
     if (this.selectedTool === "text" && this.clicked === true) {
-      this.isTyping = true;
+      // this.isTyping = true;
 
       console.log('the current tool selsected is ', this.selectedTool)
     }
@@ -532,6 +578,16 @@ export class Game {
 
     const canvasCoords = this.getUpdatedMouseCoords(e.clientX, e.clientY)
     this.collaborationManager.sendMousePosition(canvasCoords.x, canvasCoords.y);
+
+    if (this.selectedTool === "panTool" && this.clicked) {
+      const dx = e.movementX;
+      const dy = e.movementY;
+      this.panX += dx;
+      this.panY += dy;
+      this.renderingManager.clearCanvas();
+      return;
+    }
+
     if (this.selectedTool === "eraser" && this.isEraserDragging) {
       this.hanldeEraser(e)
     } else if (this.selectedTool === "pointer" && this.selectionManager.isResizing()) {

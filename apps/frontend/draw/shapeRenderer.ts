@@ -1,4 +1,5 @@
 import { Diamond, Ellipse, Line, Pencil, Rect, Arrow } from "./types";
+import { TEXT_CONFIG } from "./config/textConfig";
 
 
 export class ShapeRenderer {
@@ -67,6 +68,19 @@ export class ShapeRenderer {
 
     }
 
+    drawText(shape: any) {
+        this.ctx.save();
+        this.ctx.fillStyle = shape.color;
+        const fontSize = shape.fontSize || TEXT_CONFIG.FONT_SIZE;
+        this.ctx.font = `${TEXT_CONFIG.FONT_WEIGHT} ${fontSize}px ${TEXT_CONFIG.FONT_FAMILY}`;
+        const lines = shape.textContent.split('\n');
+        const lineHeight = fontSize * TEXT_CONFIG.LINE_HEIGHT;
+
+        lines.forEach((line: string, index: number) => {
+            this.ctx.fillText(line, shape.startX, shape.startY + fontSize + (index * lineHeight));
+        });
+        this.ctx.restore();
+    }
 
 
 

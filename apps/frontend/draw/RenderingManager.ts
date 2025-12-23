@@ -16,6 +16,7 @@ export class RenderingManager {
         private getExistingPaths: () => { [key: string]: Path2D },
         private getSelectedShape: () => BaseShape | null,
         private getCanvasSize: () => { canvasWidth: number, canvasHeight: number },
+        private getEditingTextId: () => string | null,
     ) {
         this.ctx = ctx;
         this.shapeRenderer = new ShapeRenderer(this.ctx);
@@ -51,7 +52,9 @@ export class RenderingManager {
             case 'arrow':
                 this.shapeRenderer.drawArrow(adaptedShape);
                 break;
-
+            case 'text':
+                this.shapeRenderer.drawText(adaptedShape);
+                break;
             default:
                 break;
         }
@@ -106,7 +109,10 @@ export class RenderingManager {
                 path.moveTo(shape.startX, shape.startY);
                 path.lineTo(shape.endX, shape.endY);
                 break;
-
+            case 'text':
+                const bounds = unSerializedShape.getBounds();
+                path.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+                break;
             default:
                 break;
         }
@@ -139,6 +145,11 @@ export class RenderingManager {
         }
         this.getExistingShapes().forEach((shape) => {
             const adaptedColor = this.themeBasedColorAdapter(shape.getColor());
+
+            const editingTextId = this.getEditingTextId();
+            if (editingTextId && shape.getShapeId() === editingTextId) {
+                return;
+            }
 
             const originalColor = shape.getColor();
             shape.setColor(adaptedColor);

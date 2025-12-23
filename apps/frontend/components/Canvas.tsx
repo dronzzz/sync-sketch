@@ -10,15 +10,16 @@ import { useTheme } from "next-themes";
 import MousePositionPointer from "./MousePositionPointer";
 import { ToggleTheme } from "./ToggleTheme";
 import { ShareButton } from "./ShareButton";
-import { UndoRedoButton, undoRedoButton } from "./UndoRedoButton";
+import { UndoRedoButton } from "./UndoRedoButton";
 import { ShareDialog } from "./ShareDialog";
+import { TEXT_CONFIG } from "@/draw/config/textConfig";
 
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow" | "eraser";
 
 export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }: { roomId?: string, setRoomId: (Id: string | undefined) => void, socket: WebSocket | null, loading: boolean, sessionId: string | null }) {
     const [selectedTool, setSelectedTool] = useState<Tool>('pointer');
-    const [selectedColor, setSelectedColor] = useState<Color>({ hex: "#3d3c3a" });
+    const [selectedColor, setSelectedColor] = useState<Color>({ hex: "#d3d3d3" });
     const windowSize = useWindowSize();
     const [game, setGame] = useState<Game | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -28,6 +29,13 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [shareUrl, setShareUrl] = useState<string | undefined>(undefined);
     const [isSessionActive, setIsSessionActive] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const textInputRef = useRef<HTMLTextAreaElement>(null);
+    const [textPosition, setTextPosition] = useState<{ x: number, y: number }>({ x: 0, y: 0 })
+    const [textShapeId, setTextShapeId] = useState<string | null>(null)
+    const [textScale, setTextScale] = useState<number>(1)
+    const [textFontSize, setTextFontSize] = useState<number>(TEXT_CONFIG.FONT_SIZE)
+    const [textWidth, setTextWidth] = useState<number>(100)
 
     const handleShare = () => {
         if (!game) {
@@ -44,6 +52,54 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
 
         setShareDialogOpen(true);
     };
+
+    const handleTextEditing = (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => {
+        setTextPosition({ x, y });
+        setTextScale(scale);
+        setTextFontSize(fontSize);
+        setTextWidth(textWidth);
+        setIsEditing(true);
+        setTimeout(() => {
+            if (textInputRef.current) {
+                textInputRef.current.value = text;
+                textInputRef.current.focus();
+                textInputRef.current.select();
+                // textInputRef.current.setSelectionRange(text.length, text.length);
+            }
+        }, 0)
+    }
+    const handleCanvasDoubleClick = (e: MouseEvent) => {
+        if (selectedTool !== 'pointer') return;
+        console.log("double click", e.clientX, " ", e.clientY)
+        game?.EditingText(e);
+    }
+
+    const handleCanvasClick = (e: React.MouseEvent) => {
+        if (selectedTool !== 'text') return;
+        setTextPosition({ x: e.clientX, y: e.clientY });
+        // Set scale and fontSize for new text creation
+        setTextScale(game?.getScale() || 1);
+        setTextFontSize(TEXT_CONFIG.FONT_SIZE);
+        setIsEditing(true);
+
+    }
+
+    const handleTextComplete = () => {
+        const text = textInputRef.current?.value;
+        if (text && text.trim()) {
+            if (textShapeId) {
+                game?.UpdateText(textShapeId, text);
+            } else {
+                game?.createText(textPosition, text);
+            }
+        }
+        setIsEditing(false);
+        setTextShapeId(null);
+        if (textInputRef.current) {
+            textInputRef.current.value = '';
+        }
+        setSelectedTool('pointer');
+    }
 
     const handleConfirmShare = async () => {
         if (!game) {
@@ -153,7 +209,12 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
             }
 
             console.log(isSharingMode ? 'online mode ' : 'offline mode')
-            const g = new Game(canvasRef.current, socket, roomId, resolvedTheme === "dark" ? '#0d0c09' : '#ffffff');
+            const g = new Game(canvasRef.current, socket, roomId, resolvedTheme === "dark" ? '#0d0c09' : '#ffffff',
+                (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => {
+                    handleTextEditing(text, x, y, id, scale, fontSize, textWidth);
+
+                }
+            );
             if (sessionId) g.setSessionId(sessionId);
             setGame(g);
         }
@@ -165,7 +226,10 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
 
     return (
         <div className="relative w-full h-screen overflow-hidden">
-            <canvas ref={canvasRef} height={windowSize.height} width={windowSize.width} className={`relative bg-white dark:bg-[#0d0c09] touch-none ${cursorType}`}
+            <canvas ref={canvasRef} height={windowSize.height} width={windowSize.width} className={`relative bg-white dark:bg-[#0d0c09] touch-none ${cursorType}`
+            }
+                onClick={handleCanvasClick}
+                onDoubleClick={handleCanvasDoubleClick}
             />
 
             <ToolBar
@@ -177,6 +241,59 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
 
             <ToggleTheme />
             <ShareButton onClick={handleShare} isSharing={isOnline} />
+
+            {isEditing && (
+                <textarea
+                    ref={textInputRef}
+                    data-text-input="true"
+                    style={{
+                        position: 'absolute',
+                        left: `${textPosition.x}px`,
+                        top: `${textPosition.y}px`,
+                        minWidth: `${Math.max(100, textWidth)}px`,
+                        maxWidth: `${(windowSize.width || 0) - textPosition.x - 20}px`,
+                        background: 'transparent',
+                        color: selectedColor.hex || (resolvedTheme === 'dark' ? '#d3d3d3' : 'black'),
+                        fontSize: `${textFontSize * textScale}px`,
+                        fontFamily: TEXT_CONFIG.FONT_FAMILY,
+                        fontWeight: TEXT_CONFIG.FONT_WEIGHT,
+                        lineHeight: `${TEXT_CONFIG.LINE_HEIGHT}`,
+                        height: 'auto',
+                        padding: '0',
+                        margin: '0',
+                        border: 'none',
+                        outline: 'none',
+                        resize: 'none',
+                        overflow: 'hidden',
+                        whiteSpace: 'pre',
+                        caretColor: selectedColor.hex || 'currentColor',
+                        boxSizing: 'border-box',
+
+                    }}
+                    rows={1}
+                    onInput={(e) => {
+                        const textarea = e.currentTarget;
+
+                        textarea.style.height = 'auto';
+                        textarea.style.height = `${textarea.scrollHeight}px`;
+
+                        textarea.style.width = 'auto';
+                        const maxWidth = windowSize.width - textPosition.x - 20;
+                        const contentWidth = Math.min(textarea.scrollWidth + 2, maxWidth);
+                        textarea.style.width = `${Math.max(50, contentWidth)}px`;
+                    }}
+                    onBlur={handleTextComplete}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleTextComplete();
+                        }
+
+                    }}
+                    autoFocus
+                // value={textInputRef.current?.value}
+                />
+            )}
 
             <MousePositionPointer />
             {game && (

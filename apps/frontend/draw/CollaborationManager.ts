@@ -123,7 +123,8 @@ export class CollaborationManager {
                 message: opt !== "shapeDelete" ? JSON.stringify(shapeData.serialize()) : null,
                 shapeId: shapeData.getShapeId(),
                 sessionId: this.sessionId,
-                shapeType: shapeData.constructor.name.toLowerCase(),
+                // Use serialized type instead of constructor.name to match Prisma enum
+                shapeType: serialized.type,  // "text", "rect", etc.
             }));
         }
     }
