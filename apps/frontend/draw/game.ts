@@ -234,6 +234,8 @@ export class Game {
 
       const previousState = textShape.serialize();
       textShape.setText(text);
+      textShape.incrementVersion();
+
       this.commandManager?.modify(textShape, previousState);
       this.collaborationManager.updateStore(textShape, 'shapeUpdate', this.dbPromise);
       this.editingTextId = null;
@@ -269,6 +271,8 @@ export class Game {
       if (index !== -1 && this.existingShapes[index]) {
         const previousState = this.existingShapes[index].serialize();
         this.existingShapes[index].setColor(color.hex);
+
+        this.existingShapes[index].incrementVersion();
 
         if (this.commandManager) {
           this.commandManager.modify(this.existingShapes[index], previousState);
@@ -543,10 +547,16 @@ export class Game {
         const hasChanged = JSON.stringify(currentState) !== JSON.stringify(previousState);
 
         if (hasChanged) {
+          selectedShape.incrementVersion();
+
           await this.collaborationManager.updateStore(selectedShape, 'shapeUpdate', this.dbPromise);
 
           if (this.commandManager) {
             this.commandManager.modify(selectedShape, previousState);
+          }
+
+          if (selectedShape instanceof Pencil) {
+            selectedShape.updateOriginalState();
           }
         }
       }
@@ -584,7 +594,7 @@ export class Game {
       const dy = e.movementY;
       this.panX += dx;
       this.panY += dy;
-      this.renderingManager.clearCanvas();
+      this.renderingManager.scheduleClearCanvas();
       return;
     }
 
@@ -619,7 +629,7 @@ export class Game {
           this.shapesToDelete.add(id);
 
           this.existingShapes[shapeIndex].setColor("#b0adadff");
-          this.renderingManager.clearCanvas();
+          this.renderingManager.scheduleClearCanvas();
         }
       }
     });
@@ -640,7 +650,7 @@ export class Game {
       this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
 
       this.scale = newScale
-      this.renderingManager.clearCanvas();
+      this.renderingManager.scheduleClearCanvas();
 
     }
 

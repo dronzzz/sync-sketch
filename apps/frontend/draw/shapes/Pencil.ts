@@ -3,10 +3,14 @@ import { BaseShape } from "./BaseShape";
 import { getStroke } from "perfect-freehand";
 export class Pencil extends BaseShape {
     private points: { x: number, y: number }[]
+    private originalPoints: { x: number, y: number }[];
+    private originalBounds: { x: number, y: number, width: number, height: number };
 
     constructor(points: { x: number, y: number }[], color: string, lineWidth: number, id?: string) {
         super(id, color, lineWidth);
-        this.points = points;
+        this.points = points.map(pt => ({ ...pt }));
+        this.originalPoints = points.map(pt => ({ ...pt }));
+        this.originalBounds = this.getBounds();
     }
 
 
@@ -40,10 +44,10 @@ export class Pencil extends BaseShape {
 
 
     drag(dx: number, dy: number): void {
-        this.points.forEach(pt => {
-            pt.x += dx;
-            pt.y += dy;
-        });
+        this.points = this.points.map(pt => ({
+            x: pt.x + dx,
+            y: pt.y + dy
+        }));
     }
 
 
@@ -75,8 +79,32 @@ export class Pencil extends BaseShape {
         }
     }
 
-    resize(x: number, y: number, width: number, height: number): void {
+    resize(newX: number, newY: number, newWidth: number, newHeight: number): void {
+        const origBounds = this.originalBounds;
+        if (origBounds.width === 0 || origBounds.height === 0) {
+            const dx = newX - origBounds.x;
+            const dy = newY - origBounds.y;
+            this.points = this.originalPoints.map(pt => ({
+                x: pt.x + dx,
+                y: pt.y + dy
+            }));
+            return;
+        }
 
+        const scaleX = newWidth / origBounds.width;
+        const scaleY = newHeight / origBounds.height;
 
+        this.points = this.originalPoints.map(pt => ({
+            x: newX + (pt.x - origBounds.x) * scaleX,
+            y: newY + (pt.y - origBounds.y) * scaleY
+        }));
     }
+
+
+    updateOriginalState(): void {
+        this.originalPoints = this.points.map(pt => ({ ...pt }));
+        this.originalBounds = this.getBounds();
+    }
+
+
 }

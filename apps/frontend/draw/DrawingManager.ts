@@ -58,7 +58,7 @@ export class DrawingManager {
                     width: rectWidth,
                     height: rectHeight,
                     color: selectedColor,
-                    lineWidth: strokeWidth
+                    lineWidth: strokeWidth,
                 };
                 break;
 
@@ -93,7 +93,7 @@ export class DrawingManager {
                 const currentShape = existingShapes[existingShapes.length - 1];
                 if (currentShape instanceof Pencil) {
                     currentShape.addPoint(canvasCoords.x, canvasCoords.y);
-                    this.renderingManager.clearCanvas();
+                    this.renderingManager.scheduleClearCanvas();
                     currentShape.draw(this.ctx);
                     this.collaborationManager.sendShapePreview(currentShape.serialize(), 'new');
                 }
@@ -129,8 +129,10 @@ export class DrawingManager {
         }
 
         if (previewShape) {
-            this.renderingManager.clearCanvas();
-            this.renderingManager.drawAllShapes(previewShape);
+            this.renderingManager.scheduleClearCanvas();
+            requestAnimationFrame(() => {
+                this.renderingManager.drawAllShapes(previewShape);
+            });
             this.collaborationManager.sendShapePreview(previewShape, 'new');
 
         }

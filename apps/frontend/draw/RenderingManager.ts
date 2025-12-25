@@ -6,6 +6,8 @@ export class RenderingManager {
     private ctx: CanvasRenderingContext2D;
     private shapeRenderer: ShapeRenderer;
     private Handle_size: number;
+    private needsRender = false;
+
 
 
     constructor(ctx: CanvasRenderingContext2D, Handle_size: number,
@@ -123,6 +125,17 @@ export class RenderingManager {
         }
 
 
+    }
+
+
+    scheduleClearCanvas() {
+        if (!this.needsRender) {
+            this.needsRender = true;
+            requestAnimationFrame(() => {
+                this.clearCanvas();
+                this.needsRender = false;
+            });
+        }
     }
 
     clearCanvas() {

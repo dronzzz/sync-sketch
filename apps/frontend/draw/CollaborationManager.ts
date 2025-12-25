@@ -15,7 +15,7 @@ const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, roo
         roomId,
         sessionId,
     }))
-}, 100)
+}, 50)
 
 const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, roomId: string, preview: string, sessionId: string) => {
     if (!sessionId) {
@@ -30,7 +30,7 @@ const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, roomId:
         previewType: preview,
         sessionId
     }))
-}, 100)
+}, 50)
 
 
 export class CollaborationManager {
@@ -67,12 +67,6 @@ export class CollaborationManager {
                     // console.log('Raw incoming message:', event.data);
                     // console.log('Parsed incoming message:', message);
 
-                    if (message.type === "session-init") {
-                        // console.log('Received session-init message:', message);
-                        this.sessionId = message.sessionId;
-                        // console.log('Session ID set to:', this.sessionId);
-                        return;
-                    }
 
                     if (message.type === "chat") {
                         const shapeData = JSON.parse(message.message)
@@ -123,8 +117,7 @@ export class CollaborationManager {
                 message: opt !== "shapeDelete" ? JSON.stringify(shapeData.serialize()) : null,
                 shapeId: shapeData.getShapeId(),
                 sessionId: this.sessionId,
-                // Use serialized type instead of constructor.name to match Prisma enum
-                shapeType: serialized.type,  // "text", "rect", etc.
+                shapeType: serialized.type,
             }));
         }
     }

@@ -15,6 +15,7 @@ interface SelectionState {
     isResizing: boolean,
     resizeHanle: any | null,
     previousState: Shape | null,
+    originalBounds: { x: number, y: number, width: number, height: number } | null,
 }
 
 
@@ -33,6 +34,7 @@ export class SelectionManager {
         isResizing: false,
         resizeHanle: null,
         previousState: null,
+        originalBounds: null,
     }
 
 
@@ -146,43 +148,41 @@ export class SelectionManager {
         if (this.selectionState.selectedShape) {
             this.collaborationManager.sendShapePreview(this.selectionState.selectedShape.serialize(), 'modification');
         }
-        this.renderingManager.clearCanvas();
+        this.renderingManager.scheduleClearCanvas();
 
 
     }
 
     handleShapeResize = (e: MouseEvent) => {
         const selectedState = this.selectionState;
-        if (!selectedState.selectedShape) return;
+        if (!selectedState.selectedShape || !selectedState.originalBounds) return;
+
         const { x, y } = this.getUpdatedMouseCoords(e.clientX, e.clientY);
         const dx = x - selectedState.dragStartX;
         const dy = y - selectedState.dragStartY;
 
-        const bounds = selectedState.selectedShape.getBounds()
-        if (!bounds) return
+        const origBounds = selectedState.originalBounds;
 
         switch (selectedState.resizeHanle) {
             case 'top-left':
-                selectedState.selectedShape?.resize(bounds.x + dx, bounds.y + dy, bounds.width - dx, bounds.height - dy)
+                selectedState.selectedShape?.resize(origBounds.x + dx, origBounds.y + dy, origBounds.width - dx, origBounds.height - dy)
                 break;
             case 'top-right':
-                selectedState.selectedShape?.resize(bounds.x, bounds.y + dy, bounds.width + dx, bounds.height - dy)
+                selectedState.selectedShape?.resize(origBounds.x, origBounds.y + dy, origBounds.width + dx, origBounds.height - dy)
                 break
             case 'bottom-left':
-                selectedState.selectedShape?.resize(bounds.x + dx, bounds.y, bounds.width - dx, bounds.height + dy)
+                selectedState.selectedShape?.resize(origBounds.x + dx, origBounds.y, origBounds.width - dx, origBounds.height + dy)
                 break;
             case 'bottom-right':
-                selectedState.selectedShape?.resize(bounds.x, bounds.y, bounds.width + dx, bounds.height + dy)
+                selectedState.selectedShape?.resize(origBounds.x, origBounds.y, origBounds.width + dx, origBounds.height + dy)
                 break;
-            default:
-                break;
-
-
         }
-        selectedState.dragStartX = x
-        selectedState.dragStartY = y
 
-        this.renderingManager.clearCanvas();
+        if (selectedState.selectedShape) {
+            this.collaborationManager.sendShapePreview(selectedState.selectedShape.serialize(), 'modification');
+        }
+
+        this.renderingManager.scheduleClearCanvas();
 
 
     }
@@ -196,6 +196,7 @@ export class SelectionManager {
             this.selectionState.resizeHanle = resizeHandle;
             this.selectionState.dragStartX = x;
             this.selectionState.dragStartY = y;
+            this.selectionState.originalBounds = this.selectionState.selectedShape.getBounds();
             this.selectionState.previousState = this.selectionState.selectedShape.serialize();
             console.log('inside the handleShapeSelectionMouseDown')
         } else if (this.selectionState.selectedShape && this.ctx.isPointInPath(this.renderingManager.getBoundingBox(this.selectionState?.selectedShape).path, pixelX, pixelY)) {
@@ -214,7 +215,7 @@ export class SelectionManager {
             this.selectionState.dragStartX = 0;
             this.selectionState.dragStartY = 0;
 
-            this.renderingManager.clearCanvas();
+            this.renderingManager.scheduleClearCanvas();
 
         }
 

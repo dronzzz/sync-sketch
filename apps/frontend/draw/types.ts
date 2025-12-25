@@ -6,7 +6,8 @@ interface baseShape {
     id?: string;
     color: string;
     lineWidth: number;
-
+    version: number;
+    editedAt: number;
 }
 
 export interface Rect extends baseShape {
