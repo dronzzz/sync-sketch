@@ -29,11 +29,6 @@ export function useSocket(roomId?: string) {
             setLoading(false);
         };
 
-        const handleBeforeUnload = () => {
-            cleanup();
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
 
         const currentUsername: string = getUsername();
 
@@ -62,6 +57,10 @@ export function useSocket(roomId?: string) {
                             type: "join_room",
                             roomId
                         }));
+
+                        ws?.send(JSON.stringify({
+                            type: "new",
+                        }))
                     }
                 }
             } catch (error) {
@@ -80,7 +79,6 @@ export function useSocket(roomId?: string) {
         };
 
         return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
             cleanup();
         };
     }, [roomId]);

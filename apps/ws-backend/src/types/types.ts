@@ -18,7 +18,8 @@ export interface parsedData {
     shapeId:string;
     shapeType?:string
     message?:string;
-    
+    targetUserId?: string;
+
 }
 
 export interface mouseMovement{

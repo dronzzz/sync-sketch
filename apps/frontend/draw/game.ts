@@ -29,7 +29,6 @@ export class Game {
   private scale: number = 1;
   private panX: number = 0;
   private panY: number = 0;
-  private isTyping: boolean;
   private selectedColor: string;
   private currentTheme: string;
   private editingTextId: string | null = null;
@@ -48,6 +47,8 @@ export class Game {
   private renderingManager: RenderingManager;
   private selectionManager: SelectionManager;
   private drawingManager: DrawingManager;
+  private sceneInitialized = false;
+  private sceneInitTimeout: NodeJS.Timeout | null = null;
 
   setSessionId(id: string) {
     this.collaborationManager.setSessionId(id);
@@ -62,7 +63,6 @@ export class Game {
     this.existingShapes = [];
     this.existingPaths = {}
     this.clicked = false;
-    this.isTyping = false;
     this.socket = socket || null;
     this.roomId = roomId || null;
     this.currentTheme = theme === "light" ? "#ffffff" : "#0d0c09";
@@ -105,11 +105,25 @@ export class Game {
         this.renderingManager.drawAllShapes(shape);
 
       },
-      (userId: string, x: number, y: number) => {
+      (userId: string, x: number, y: number, username: string) => {
         const { setMousePosition } = useMouseStore.getState();
-        setMousePosition(userId, x, y);
+        setMousePosition(userId, x, y, username);
       },
-      () => ({ scale: this.scale, panX: this.panX, panY: this.panY })
+      () => ({ scale: this.scale, panX: this.panX, panY: this.panY }),
+      () => this.existingShapes,
+      (newShapes: Shape[]) => {
+
+        this.existingShapes.length = 0;
+        this.existingShapes.push(...newShapes.map(s => ShapeFactory.createShapeFromData(s)));
+        this.renderingManager.clearCanvas();
+      },
+      () => {
+        this.sceneInitialized = true;
+        if (this.sceneInitTimeout) {
+          clearTimeout(this.sceneInitTimeout);
+          this.sceneInitTimeout = null;
+        }
+      }
     );
 
 
@@ -156,7 +170,6 @@ export class Game {
 
   }
 
-
   async init() {
     this.ctx.fillStyle = this.currentTheme
     this.ctx.strokeStyle = this.selectedColor
@@ -167,20 +180,30 @@ export class Game {
 
       const shapes = await getAllShapes(this.dbPromise);   //from local indexdb
 
-      this.existingShapes = shapes.map((shapeData: Shape) =>
+      this.existingShapes.length = 0;
+      this.existingShapes.push(...shapes.map((shapeData: Shape) =>
         ShapeFactory.createShapeFromData(shapeData)
-      );
+      ));
+      this.sceneInitialized = true;
 
     } else {
-      const shapes = await getExistingShapes(this.roomId!);
-      this.existingShapes = shapes.map((shapeData: Shape) =>
-        ShapeFactory.createShapeFromData(shapeData)
-      );
+      this.sceneInitTimeout = setTimeout(async () => {
+        if (!this.sceneInitialized) {
+          const shapes = await getExistingShapes(this.roomId!);
+
+          this.existingShapes.length = 0;
+          this.existingShapes.push(...shapes.map((shapeData: Shape) =>
+            ShapeFactory.createShapeFromData(shapeData)
+          ));
+
+          this.sceneInitialized = true;
+          this.renderingManager.clearCanvas();
+        }
+      }, 3000);
     }
 
 
     this.commandManager = new CommandManager(this.existingShapes, () => this.renderingManager.clearCanvas());
-
     this.renderingManager.clearCanvas();
   }
 
@@ -475,13 +498,6 @@ export class Game {
       );
       this.existingShapes.push(shape);
     }
-
-    if (this.selectedTool === "text" && this.clicked === true) {
-      // this.isTyping = true;
-
-      console.log('the current tool selsected is ', this.selectedTool)
-    }
-
 
   };
 

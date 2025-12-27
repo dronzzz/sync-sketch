@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
-import { handleChat, handleJoinRoom, handleLeaveRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, handleShapeDelete, removeUserFromRoom } from './handlers';
+import { handleChat, handleJoinRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, handleShapeDelete, removeUserFromRoom, handleSceneInit } from './handlers';
 // import { JWT_SECRET } from '@repo/backend-common/config';
 
 
@@ -49,13 +49,13 @@ export class SocketServer {
     //     }
     // }
 
-    private cleanUpSession = (sessionId: string) => {
+    private cleanUpSession = async (sessionId: string) => {
         const session = this.sessions.get(sessionId)
         if (!session) return;
 
 
         if (session.roomId) {
-            removeUserFromRoom(sessionId);
+            await removeUserFromRoom(sessionId, this.sessions);
         }
 
 
@@ -126,12 +126,19 @@ export class SocketServer {
     }
 
     private handleClose = (ws: WebSocket) => {
+        console.log('[SOCKET] WebSocket closing, cleaning up session...');
 
+        // Find and cleanup session in background (don't block close handshake)
         Object.entries(this.sessions).forEach(([sessionId, session]) => {
             if (session.ws === ws) {
-                this.cleanUpSession(sessionId)
+                // Fire-and-forget cleanup - don't await
+                this.cleanUpSession(sessionId).catch(err =>
+                    console.error(`Cleanup error for session ${sessionId}:`, err)
+                );
             }
-        })
+        });
+
+        // Close immediately without waiting for cleanup
         ws.close();
     }
 
@@ -162,10 +169,11 @@ export class SocketServer {
 
         switch (parsedData.type) {
             case 'join_room':
-                handleJoinRoom(session, parsedData)
+                handleJoinRoom(session, parsedData, this.sessions)
                 break;
             case 'leave_room':
-                handleLeaveRoom(session, parsedData)
+                removeUserFromRoom(session.sessionId, this.sessions);
+                session.roomId = null;
                 break;
             case 'chat':
                 handleChat(session, this.sessions, parsedData)
@@ -181,6 +189,9 @@ export class SocketServer {
                 break;
             case 'shapePreview':
                 handleShapePreview(session, this.sessions, parsedData)
+                break;
+            case 'scene-init':
+                handleSceneInit(session, this.sessions, parsedData)
                 break;
 
             default:

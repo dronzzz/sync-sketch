@@ -13,6 +13,7 @@ import { ShareButton } from "./ShareButton";
 import { UndoRedoButton } from "./UndoRedoButton";
 import { ShareDialog } from "./ShareDialog";
 import { TEXT_CONFIG } from "@/draw/config/textConfig";
+import { ActiveUsers } from "./ActiveUsers";
 
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow" | "eraser";
@@ -241,6 +242,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
 
             <ToggleTheme />
             <ShareButton onClick={handleShare} isSharing={isOnline} />
+            {isOnline && <ActiveUsers sessionId={sessionId} />}
 
             {isEditing && (
                 <textarea
