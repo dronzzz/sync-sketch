@@ -39,7 +39,7 @@ export class Game {
 
   private hitTolerance: number = 16;
   private sessionId: string | null = null;
-  private isOnline: boolean = false;
+  isOnline: boolean = false;
   private dbPromise: any | null = null;
   private shapesToDelete: Set<string> = new Set();
   private commandManager: CommandManager | null = null;
@@ -180,6 +180,18 @@ export class Game {
 
     this.commandManager = new CommandManager(this.existingShapes, () => this.renderingManager.clearCanvas());
     this.renderingManager.clearCanvas();
+  }
+  upgradeToOnline(socket: WebSocket, roomId: string, sessionId: string) {
+    this.socket = socket;
+    this.roomId = roomId;
+    this.sessionId = sessionId;
+    this.collaborationManager.upgradeConnection(socket, roomId, sessionId);
+  }
+  downgradeToOffline() {
+    this.socket = null;
+    this.roomId = null;
+    this.sessionId = null;
+    this.collaborationManager.downgradeConnection();
   }
 
   clearCanvas() {
@@ -341,6 +353,7 @@ export class Game {
       this.renderingManager.clearCanvas();
 
     }
+
   }
 
   redo = async () => {

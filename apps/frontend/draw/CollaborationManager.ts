@@ -9,6 +9,7 @@ import { useMouseStore } from "@/store/useMouseStore";
 import { useRoomStore } from "@/store/useRoomStore";
 
 const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, username: string) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({
         type: "mouseMovement",
         x,
@@ -18,6 +19,7 @@ const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, use
 }, 16)
 
 const queuePeriodicSync = throttle((socket: WebSocket, getExistingShapes: () => BaseShape[]) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
     const shapes = getExistingShapes();
     const serialized = shapes.map(shape => shape.serialize());
 
@@ -113,6 +115,20 @@ export class CollaborationManager {
                 }
             };
         }
+    }
+
+    upgradeConnection = async (socket: WebSocket, roomId: string, sessionId: string) => {
+        this.socket = socket;
+        this.roomId = roomId;
+        this.sessionId = sessionId;
+        this.isOnline = !!(this.socket && this.roomId);
+        this.initHandlers()
+    }
+    downgradeConnection() {
+        this.socket = null;
+        this.roomId = null;
+        this.sessionId = null;
+        this.isOnline = false;
     }
 
     updateStore = async (shapeData: BaseShape, opt: 'shapeUpdate' | 'chat' | 'shapeDelete', dbPromise: IDBPDatabase<SketchDB>) => {

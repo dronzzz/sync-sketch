@@ -14,7 +14,9 @@ import { UndoRedoButton } from "./UndoRedoButton";
 import { ShareDialog } from "./ShareDialog";
 import { TEXT_CONFIG } from "@/draw/config/textConfig";
 import { ActiveUsers } from "./ActiveUsers";
-
+import { generateSlug } from "@/lib/utils";
+import { BACKEND_URL } from "@/config";
+import { toast } from 'sonner';
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow" | "eraser";
 
@@ -45,7 +47,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         }
 
 
-        if (isOnline && roomId) {
+        if (game.isOnline && roomId) {
             const currentSlug = window.location.pathname.split('/').pop();
             setShareUrl(`${window.location.origin}/canvas/${currentSlug}`);
             setIsSessionActive(true);
@@ -108,42 +110,52 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
             return;
         }
 
+        const slug = generateSlug();
+
+        const url = `${window.location.origin}/canvas/${slug}`;
+        setShareUrl(url);
+        setIsSessionActive(true);
+
+
+        window.history.pushState({}, '', `/canvas/${slug}`);
+
+
+        setRoomId(slug);
+        const preventClose = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+        window.addEventListener('beforeunload', preventClose);
+
         try {
             const shapes = await game?.getAllShapesFromGameState();
-            // const shapes = await getAllShapes(game.getDBPromise());
-            const resp = await fetch('/api/share', {
+            const resp = await fetch(`${BACKEND_URL}/create-room-temp`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ shapes })
+                body: JSON.stringify({
+                    shapes,
+                    roomId: slug
+                })
             });
 
             if (!resp.ok) {
                 throw new Error('Failed to create room');
             }
+            window.removeEventListener('beforeunload', preventClose);
 
-            const data = await resp.json();
-            const { roomId: newRoomId, slug } = data;
-
-            if (!slug || !newRoomId) {
-                throw new Error('No slug or roomId received');
-            }
-
-            const url = `${window.location.origin}/canvas/${slug}`;
-            setShareUrl(url);
-            setIsSessionActive(true);
-
-
-            window.history.pushState({}, '', `/canvas/${slug}`);
-
-
-            setRoomId(newRoomId);
 
         } catch (error) {
             console.error('Share error:', error);
+            toast.error('Failed to create room. Please try sharing again.');
+            // window.alert('Failed to create room. Please try sharing again.');
             setShareDialogOpen(false);
             setIsSessionActive(false);
+            game?.downgradeToOffline();
+            setRoomId(undefined);
+            window.history.pushState({}, '', '/');
+            window.removeEventListener('beforeunload', preventClose);
         }
     };
 
@@ -151,10 +163,15 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         setIsSessionActive(false);
         setShareDialogOpen(false);
         setShareUrl(undefined);
-        alert('stopping the sessoin will overwrite previous stored data ')
+        const confirmed = window.confirm('stopping the sessoin will overwrite previous stored data ')
+
+        if (!confirmed) {
+            return;
+        }
 
 
         await game?.overWriteExistingData()
+        game?.downgradeToOffline();
 
 
         setRoomId(undefined)
@@ -187,37 +204,25 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         }
     }, [resolvedTheme, game]);
 
+
     useEffect(() => {
         if (!canvasRef.current) return;
 
+        if (!game) {
 
-        const isCurrentlyOnline = !!(game?.roomId);
-        const shouldBeOnline = !!(roomId && socket && sessionId);
-
-
-        if (game && isCurrentlyOnline === shouldBeOnline) {    //dnt reinitialise if already in correct state
-            return;
-        }
-
-
-        const isOffline = !roomId;
-        const isSharingMode = roomId && socket && sessionId;
-
-        if (isOffline || isSharingMode) {
-
-            if (game) {
-                game.destroy();
-            }
-
-            console.log(isSharingMode ? 'online mode ' : 'offline mode')
             const g = new Game(canvasRef.current, socket, roomId, resolvedTheme === "dark" ? '#0d0c09' : '#ffffff',
                 (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => {
                     handleTextEditing(text, x, y, id, scale, fontSize, textWidth);
 
                 }
             );
-            if (sessionId) g.setSessionId(sessionId);
             setGame(g);
+            return;
+        }
+
+        if (roomId && socket && sessionId && !game.isOnline) {
+            console.log("upgrading to online")
+            game.upgradeToOnline(socket, roomId, sessionId);
         }
 
 
@@ -302,7 +307,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
                 <UndoRedoButton game={game} />
             )}
 
-            {loading && roomId && (() => {
+            {/* {loading && roomId && (() => {
                 return (
                     <div className="fixed inset-0 flex justify-center items-center text-black dark:text-white z-10 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
                         <div className="text-center">
@@ -311,7 +316,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
                         </div>
                     </div>
                 );
-            })()}
+            })()} */}
 
             {shareDialogOpen && (
                 <ShareDialog

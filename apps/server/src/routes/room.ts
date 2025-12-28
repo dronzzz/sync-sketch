@@ -6,29 +6,29 @@ import { middleware } from "../middleware";
 
 const router: Router = Router();
 
-function generateSlug(digits: number = 10) {
-    const characters = '0123456789abcdefghijklmnopqrstuvwxyz';
-    let slug = "";
-    for (let i = 0; i < digits; i++) {
-        slug += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return slug;
-}
+// function generateSlug(digits: number = 10) {
+//     const characters = '0123456789abcdefghijklmnopqrstuvwxyz';
+//     let slug = "";
+//     for (let i = 0; i < digits; i++) {
+//         slug += characters.charAt(Math.floor(Math.random() * characters.length));
+//     }
+//     return slug;
+// }
 
 
 router.post("/create-room-temp", async (req, res) => {
     try {
-        const { shapes } = req.body;
+        const { shapes, roomId } = req.body;
 
         if (!Array.isArray(shapes)) {
             res.status(400).json({ error: "Invalid shapes" });
             return;
         }
 
-        const slug = generateSlug();
+        // const slug = generateSlug();
 
         const room = await prisma.room.create({
-            data: { slug, adminId: null as any }
+            data: { slug: roomId, adminId: null as any }
         });
 
 
