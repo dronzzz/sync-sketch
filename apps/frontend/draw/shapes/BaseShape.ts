@@ -6,6 +6,7 @@ export abstract class BaseShape {
     protected lineWidth: number;
     protected version: number;
     protected editedAt: number;
+    protected isDeleted: boolean = false;
 
     constructor(id: string | undefined, color: string, lineWidth: number) {
         this.id = id ?? crypto.randomUUID();
@@ -29,6 +30,15 @@ export abstract class BaseShape {
     getLineWidth(): number {
         return this.lineWidth;
     }
+
+    getIsDeleted(): boolean {
+        return this.isDeleted;
+    }
+
+    getVersion(): number {
+        return this.version;
+    }
+
     abstract drag(dx: number, dy: number): void;
     abstract getBounds(): { x: number, y: number, width: number, height: number };
     abstract draw(ctx: CanvasRenderingContext2D): void;
@@ -38,5 +48,32 @@ export abstract class BaseShape {
     incrementVersion(): void {
         this.version++;
         this.editedAt = Date.now();
+    }
+
+    markAsDeleted(): void {
+        this.isDeleted = true;
+        this.incrementVersion();
+    }
+
+    restore(): void {
+        this.isDeleted = false;
+        this.incrementVersion();
+    }
+
+    setMetadata(version?: number, editedAt?: number, isDeleted?: boolean) {
+        if (version !== undefined) this.version = version;
+        if (editedAt !== undefined) this.editedAt = editedAt;
+        if (isDeleted !== undefined) this.isDeleted = isDeleted;
+    }
+
+    protected getMetadata() {
+        return {
+            id: this.id,
+            color: this.color,
+            lineWidth: this.lineWidth,
+            version: this.version,
+            editedAt: this.editedAt,
+            isDeleted: this.isDeleted
+        };
     }
 }

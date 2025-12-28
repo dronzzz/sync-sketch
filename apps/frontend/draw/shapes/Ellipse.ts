@@ -52,9 +52,7 @@ export class Ellipse extends BaseShape {
             centerY: centerY,
             radiusX: radiusX,
             radiusY: radiusY,
-            id: this.getShapeId(),
-            color: this.getColor(),
-            lineWidth: this.getLineWidth()
+            ...this.getMetadata()
         }
     }
 

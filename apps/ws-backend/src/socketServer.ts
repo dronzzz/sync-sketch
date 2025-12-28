@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
-import { handleChat, handleJoinRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, handleShapeDelete, removeUserFromRoom, handleSceneInit } from './handlers';
+import { handleChat, handleJoinRoom, handleMouseMovement, handleShapePreview, handleShapeUpdate, removeUserFromRoom, handleSceneInit } from './handlers';
 // import { JWT_SECRET } from '@repo/backend-common/config';
 
 
@@ -126,19 +126,12 @@ export class SocketServer {
     }
 
     private handleClose = (ws: WebSocket) => {
-        console.log('[SOCKET] WebSocket closing, cleaning up session...');
-
-        // Find and cleanup session in background (don't block close handshake)
-        Object.entries(this.sessions).forEach(([sessionId, session]) => {
+        this.sessions.forEach((session, sessionId) => {
             if (session.ws === ws) {
-                // Fire-and-forget cleanup - don't await
-                this.cleanUpSession(sessionId).catch(err =>
-                    console.error(`Cleanup error for session ${sessionId}:`, err)
-                );
+                this.cleanUpSession(sessionId)
             }
-        });
+        })
 
-        // Close immediately without waiting for cleanup
         ws.close();
     }
 
@@ -161,10 +154,10 @@ export class SocketServer {
             return;
 
         }
-        if (parsedData.type !== "mouseMovement") {
-            console.log('handlemessage" ', parsedData)
+        // if (parsedData.type !== "mouseMovement") {
+        //     console.log('handlemessage" ', parsedData)
 
-        }
+        // }
 
 
         switch (parsedData.type) {
@@ -182,11 +175,10 @@ export class SocketServer {
                 handleMouseMovement(session, this.sessions, parsedData)
                 break;
             case 'shapeUpdate':
+            case 'shapeDelete':
                 handleShapeUpdate(session, this.sessions, parsedData)
                 break;
-            case 'shapeDelete':
-                handleShapeDelete(session, this.sessions, parsedData)
-                break;
+
             case 'shapePreview':
                 handleShapePreview(session, this.sessions, parsedData)
                 break;

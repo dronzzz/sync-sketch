@@ -1,10 +1,9 @@
 import { BaseShape } from "./shapes/BaseShape";
 import { saveShape, SketchDB } from "@/lib/indexdb";
 import { IDBPDatabase } from 'idb';
-import { ShapeFactory } from "./utils/ShapeFactory";
 import throttle from "lodash.throttle";
 import { Shape } from "./types";
-import { mergeFullScene } from "./utils/mergeScene";
+import { mergeFullScene, mergeSingleShape } from "./utils/mergeScene";
 import { getUsername } from "@/lib/username";
 import { useMouseStore } from "@/store/useMouseStore";
 import { useRoomStore } from "@/store/useRoomStore";
@@ -16,7 +15,9 @@ const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, use
         y,
         username
     }))
-}, 50)
+}, 16)
+
+
 
 const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, preview: string, sessionId: string) => {
     if (!sessionId) {
@@ -29,7 +30,7 @@ const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, preview
         message: JSON.stringify(inputShape),
         previewType: preview,
     }))
-}, 50)
+}, 16)
 
 export class CollaborationManager {
     private socket: WebSocket | null;
@@ -40,9 +41,6 @@ export class CollaborationManager {
     private sceneInitialized: boolean = false;
 
     constructor(socket?: WebSocket | null, roomId?: string | null,
-        private onShapeReceived: (shape: BaseShape) => void,
-        private onShapeUpdated: (shape: BaseShape) => void,
-        private onShapeDeleted: (shapeId: string) => void,
         private onShapePreview: (shape: Shape, previewType: string) => void,
         private onMouseMove: (userId: string, x: number, y: number, username: string) => void,
         private getTransform: () => { scale: number; panX: number; panY: number },
@@ -70,44 +68,37 @@ export class CollaborationManager {
                     // console.log('Raw incoming message:', event.data);
                     // console.log('Parsed incoming message:', message);
 
-                    if (message.type === "new-user") {
-                        this.handleSceneBroadCast(message.sessionId);
-
-                    }
-                    if (message.type === "scene-init") {
-                        this.handleSceneInit(message);
-                    }
-                    if (message.type === "room-users") {
-                        this.handleRoomUsers(message);
-                    }
-                    if (message.type === "scene-update") {
-                        this.handleSceneUpdate(message);
-                    }
-                    if (message.type === "chat") {
-                        const shapeData = JSON.parse(message.message)
-                        const shape = ShapeFactory.createShapeFromData(shapeData)
-                        this.onShapeReceived(shape);
-                    }
-                    if (message.type === "mouseMovement") {
-                        const transform = this.getTransform(); //world coord --> screen coord
-                        const screenX = message.x * transform.scale + transform.panX;
-                        const screenY = message.y * transform.scale + transform.panY;
-                        this.onMouseMove(message.sessionId, screenX, screenY, message.username);
-                    }
-
-                    if (message.type === 'shapeUpdate') {
-                        const updatedShape = JSON.parse(message.message);
-                        const shape = ShapeFactory.createShapeFromData(updatedShape)
-                        this.onShapeUpdated(shape)
-                    }
-
-                    if (message.type === 'shapeDelete') {
-                        this.onShapeDeleted(message.shapeId);
-
-
-                    } else if (message.type === 'shapePreview') {
-                        const previewShape = JSON.parse(message.message);
-                        this.onShapePreview(previewShape, message.previewType);
+                    switch (message.type) {
+                        case 'new-user':
+                            this.handleSceneBroadCast(message.sessionId);
+                            break;
+                        case 'scene-init':
+                            this.handleSceneInit(message);
+                            break;
+                        case 'room-users':
+                            this.handleRoomUsers(message);
+                            break;
+                        case 'scene-update':
+                            this.handleSceneUpdate(message);
+                            break;
+                        case 'chat':
+                        case 'shapeUpdate':
+                        case 'shapeDelete':
+                            const shapeData = JSON.parse(message.message);
+                            this.handleSingleShapeUpdate(shapeData);
+                            break;
+                        case "mouseMovement":
+                            const transform = this.getTransform(); //world coord --> screen coord
+                            const screenX = message.x * transform.scale + transform.panX;
+                            const screenY = message.y * transform.scale + transform.panY;
+                            this.onMouseMove(message.sessionId, screenX, screenY, message.username);
+                            break;
+                        case "shapePreview":
+                            const previewShape = JSON.parse(message.message);
+                            this.onShapePreview(previewShape, message.previewType);
+                            break;
+                        default:
+                            break;
                     }
 
                 } catch (error) {
@@ -130,7 +121,7 @@ export class CollaborationManager {
             this.socket.send(JSON.stringify({
                 type: opt,
                 roomId: this.roomId,
-                message: opt !== "shapeDelete" ? JSON.stringify(shapeData.serialize()) : null,
+                message: JSON.stringify(serialized),
                 shapeId: shapeData.getShapeId(),
                 shapeType: serialized.type,
             }));
@@ -211,6 +202,12 @@ export class CollaborationManager {
                 removeUser(userId);
             }
         }
+    }
+
+    handleSingleShapeUpdate(remoteShape: Shape) {
+        const localShapes = this.getExistingShapes().map(s => s.serialize());
+        const updatedShapes = mergeSingleShape(localShapes, remoteShape);
+        this.updateExistingShape(updatedShapes);
     }
 
     handleSceneUpdate(remoteShapes: Shape[]) {

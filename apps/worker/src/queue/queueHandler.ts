@@ -21,11 +21,8 @@ export async function startWorker() {
                     break;
 
                 case 'shapeUpdate':
-                    await handleShapeUpdateDb(parsedMessage);
-                    break;
-
                 case 'shapeDelete':
-                    await handleShapeDeleteDb(parsedMessage);
+                    await handleShapeUpdateDb(parsedMessage);
                     break;
 
                 default:
@@ -60,6 +57,8 @@ async function handleChatCreation(parsedMessage: parsedMessage) {
 }
 
 async function handleShapeUpdateDb(parsedMessage: parsedMessage) {
+    const shapeData = JSON.parse(parsedMessage.message);
+
     await prisma.chat.update({
         where: {
             roomId_shapeId: {
@@ -68,27 +67,13 @@ async function handleShapeUpdateDb(parsedMessage: parsedMessage) {
             }
         },
         data: {
-            data: parsedMessage.message
+            data: parsedMessage.message,
+            isDeleted: shapeData.isDeleted ?? false,
+
         }
     })
 }
 
-async function handleShapeDeleteDb(parsedMessage: parsedMessage) {
-    try {
-        await prisma.chat.delete({
-            where: {
-                roomId_shapeId: {
-                    roomId: parsedMessage.roomId,
-                    shapeId: parsedMessage.shapeId
-                }
-            }
-        });
-
-
-    } catch (error) {
-
-    }
-}
 
 export interface parsedMessage {
     type: 'chat' | 'shapeUpdate' | 'shapeDelete';

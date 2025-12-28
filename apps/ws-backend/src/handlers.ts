@@ -8,10 +8,10 @@ export const handleJoinRoom = async (session: ClientSession, parsedData: parsedD
     const { sessionId, username, roomId: currentRoom } = session;
     const targetRoomId = parsedData.roomId;
 
-    await Promise.all([
-        redis.sadd(`room:${targetRoomId}:sessions`, sessionId),
-        redis.set(`session:${sessionId}:room`, targetRoomId)
-    ]);
+    await redis.pipeline()
+        .sadd(`room:${targetRoomId}:sessions`, sessionId)
+        .set(`session:${sessionId}:room`, targetRoomId)
+        .exec();
 
     session.roomId = targetRoomId;
 
@@ -27,12 +27,12 @@ export const removeUserFromRoom = async (sessionId: string, sessions: Map<string
     const roomId = await redis.get(`session:${sessionId}:room`);
 
     if (roomId) {
+        await redis.pipeline()
+            .srem(`room:${roomId}:sessions`, sessionId)
+            .del(`session:${sessionId}:room`)
+            .exec();
 
-        // Run Redis delete operations in parallel
-        await Promise.all([
-            redis.srem(`room:${roomId}:sessions`, sessionId),
-            redis.del(`session:${sessionId}:room`)
-        ]);
+        sessions.delete(sessionId);
 
         const remainingUsers = await redis.scard(`room:${roomId}:sessions`);
         if (remainingUsers === 0) {
@@ -76,7 +76,7 @@ export const handleMouseMovement = async (session: ClientSession, sessions: Map<
 export const handleShapeUpdate = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
 
     const shape = {
-        type: "shapeUpdate",
+        type: parsedData.type,
         message: parsedData.message,
         shapeId: parsedData.shapeId,
     }
@@ -84,17 +84,6 @@ export const handleShapeUpdate = async (session: ClientSession, sessions: Map<st
     await broadcastToRoom(session, shape, sessions);
     await pushToQueue(session, shape);
 
-}
-
-export const handleShapeDelete = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
-
-    const deleteMessage = {
-        type: "shapeDelete",
-        shapeId: parsedData.shapeId,
-    }
-
-    await broadcastToRoom(session, deleteMessage, sessions);
-    await pushToQueue(session, deleteMessage);
 }
 
 export const handleShapePreview = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: previewShape) => {

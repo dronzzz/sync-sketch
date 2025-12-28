@@ -73,9 +73,7 @@ export class Pencil extends BaseShape {
         return {
             type: 'pencil',
             points: this.points,
-            id: this.getShapeId(),
-            color: this.getColor(),
-            lineWidth: this.getLineWidth()
+            ...this.getMetadata()
         }
     }
 

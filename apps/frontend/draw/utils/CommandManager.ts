@@ -83,27 +83,34 @@ export class CommandManager {
 
     private executeUndo = (action: Command) => {
 
+
         switch (action.action) {
-            case "add": //remove
-                const addIndx = this.shapeList.findIndex(s => s.getShapeId() === action.shapeId)
-                if (addIndx !== -1) {
-                    this.shapeList.splice(addIndx, 1);
+            case "add": // remove
+                const shape = this.shapeList.find(s => s.getShapeId() === action.shapeId);
+                if (shape) {
+                    shape.markAsDeleted();
                 }
                 break;
-            case "delete":  //restore
-                this.shapeList.push(ShapeFactory.createShapeFromData(action.shapeData))
+            case "delete":  // restore
+                const deletedShape = this.shapeList.find(s => s.getShapeId() === action.shapeId);
+                if (deletedShape && deletedShape.getIsDeleted()) {
+                    deletedShape.restore();
+                }
                 break;
             case "modify":
                 if (action.previousData) {
                     const indx = this.shapeList.findIndex(s => s.getShapeId() === action.shapeId)
                     if (indx !== -1) {
-                        this.shapeList[indx] = ShapeFactory.createShapeFromData(action.previousData)
-
+                        const currentVersion = this.shapeList[indx].getVersion();
+                        const restoredShape = ShapeFactory.createShapeFromData(action.previousData);
+                        restoredShape.setMetadata(currentVersion + 1, Date.now(), undefined);
+                        this.shapeList[indx] = restoredShape;
                     }
                     break;
                 }
         }
         this.clearCanvasFn();
+
 
     }
 
@@ -111,22 +118,27 @@ export class CommandManager {
 
         switch (action.action) {
             case "add":
-                this.shapeList.push(ShapeFactory.createShapeFromData(action.shapeData))
-                break;
-
-            case "modify":
-                const indx = this.shapeList.findIndex(s => s.getShapeId() === action.shapeId)
-                if (indx !== -1) {
-                    this.shapeList[indx] = ShapeFactory.createShapeFromData(action.shapeData)
+                const shape = this.shapeList.find(s => s.getShapeId() === action.shapeId);
+                if (shape && shape.getIsDeleted()) {
+                    shape.restore();
                 }
                 break;
 
-
-
+            case "modify":
+                if (action.shapeData) {
+                    const indx = this.shapeList.findIndex(s => s.getShapeId() === action.shapeId)
+                    if (indx !== -1) {
+                        const currentVersion = this.shapeList[indx].getVersion();
+                        const redoneShape = ShapeFactory.createShapeFromData(action.shapeData);
+                        redoneShape.setMetadata(currentVersion + 1, Date.now(), undefined);
+                        this.shapeList[indx] = redoneShape;
+                    }
+                    break;
+                }
             case "delete":
-                const delIndx = this.shapeList.findIndex(s => s.getShapeId() === action.shapeId)
-                if (delIndx !== -1) {
-                    this.shapeList.splice(delIndx, 1);
+                const deletedShape = this.shapeList.find(s => s.getShapeId() === action.shapeId);
+                if (deletedShape) {
+                    deletedShape.markAsDeleted();
                 }
                 break;
 

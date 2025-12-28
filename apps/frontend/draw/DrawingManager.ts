@@ -129,10 +129,8 @@ export class DrawingManager {
         }
 
         if (previewShape) {
+            this.renderingManager.setPreviewShape(previewShape);
             this.renderingManager.scheduleClearCanvas();
-            requestAnimationFrame(() => {
-                this.renderingManager.drawAllShapes(previewShape);
-            });
             this.collaborationManager.sendShapePreview(previewShape, 'new');
 
         }

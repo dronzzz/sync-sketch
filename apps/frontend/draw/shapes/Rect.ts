@@ -45,9 +45,7 @@ export class Rect extends BaseShape {
             y: this.y,
             width: this.width,
             height: this.height,
-            color: this.getColor(),
-            lineWidth: this.getLineWidth(),
-            id: this.getShapeId()
+            ...this.getMetadata()
         };
     }
 

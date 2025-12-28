@@ -67,16 +67,14 @@ export class Arrow extends BaseShape {
         this.endY = y + height;
     }
 
-    serialize(): Shape {
+    serialize() {
         return {
             type: 'arrow',
             startX: this.startX,
             startY: this.startY,
             endX: this.endX,
             endY: this.endY,
-            id: this.getShapeId(),
-            color: this.getColor(),
-            lineWidth: this.getLineWidth()
+            ...this.getMetadata()
         };
     }
-} 
+}

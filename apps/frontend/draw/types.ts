@@ -8,6 +8,7 @@ interface baseShape {
     lineWidth: number;
     version: number;
     editedAt: number;
+    isDeleted: boolean;
 }
 
 export interface Rect extends baseShape {

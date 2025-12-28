@@ -50,9 +50,7 @@ export class Line extends BaseShape {
             startY: this.startY,
             endX: this.endX,
             endY: this.endY,
-            id: this.getShapeId(),
-            color: this.getColor(),
-            lineWidth: this.getLineWidth()
+            ...this.getMetadata()
         }
     }
 

@@ -43,9 +43,10 @@ model Chat {
   createdAt DateTime @default(now())
   room Room @relation(fields: [roomId], references: [id])
   user User? @relation(fields: [userId],references: [id])
+  isDeleted Boolean @default(false)
   
   @@unique([roomId, shapeId])
-  @@index([roomId])
+  @@index([roomId, isDeleted]) 
 }
 
 enum ShapeType {

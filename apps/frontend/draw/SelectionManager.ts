@@ -3,6 +3,7 @@ import { RenderingManager } from "./RenderingManager";
 import { BaseShape } from "./shapes/BaseShape";
 import { Shape } from "./types";
 import { CollaborationManager } from "./CollaborationManager";
+import throttle from "lodash.throttle";
 
 
 
@@ -57,6 +58,11 @@ export class SelectionManager {
         this.isHovering = false;
         this.renderingManager = renderingManager;
     }
+
+
+    private throttledVersionUpdate = throttle((shape: BaseShape) => {
+        shape.incrementVersion();
+    }, 16);
 
 
     mouseHoverDetection = async (e: MouseEvent) => {
@@ -146,7 +152,9 @@ export class SelectionManager {
         this.selectionState.dragStartY = y
 
         if (this.selectionState.selectedShape) {
+            this.throttledVersionUpdate(this.selectionState.selectedShape);
             this.collaborationManager.sendShapePreview(this.selectionState.selectedShape.serialize(), 'modification');
+
         }
         this.renderingManager.scheduleClearCanvas();
 
@@ -179,6 +187,7 @@ export class SelectionManager {
         }
 
         if (selectedState.selectedShape) {
+            this.throttledVersionUpdate(selectedState.selectedShape);
             this.collaborationManager.sendShapePreview(selectedState.selectedShape.serialize(), 'modification');
         }
 

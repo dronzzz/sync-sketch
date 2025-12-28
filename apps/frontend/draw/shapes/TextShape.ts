@@ -77,9 +77,7 @@ export class TextShape extends BaseShape {
       startX: this.startX,
       startY: this.startY,
       fontSize: this.fontSize,
-      color: this.getColor(),
-      lineWidth: this.getLineWidth(),
-      id: this.getShapeId()
+      ...this.getMetadata()
     };
   }
 

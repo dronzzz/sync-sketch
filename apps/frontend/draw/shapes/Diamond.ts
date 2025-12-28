@@ -61,9 +61,7 @@ export class Diamond extends BaseShape {
             centerY: this.centerY,
             radiusX: this.radiusX,
             radiusY: this.radiusY,
-            id: this.getShapeId(),
-            color: this.getColor(),
-            lineWidth: this.getLineWidth()
+            ...this.getMetadata()
         }
     }
 

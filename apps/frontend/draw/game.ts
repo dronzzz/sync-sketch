@@ -69,31 +69,6 @@ export class Game {
     this.selectedColor = theme === "light" ? "#1f1f1f" : "#d3d3d3";
 
     this.collaborationManager = new CollaborationManager(socket, roomId,
-      (shape: BaseShape) => {
-        this.existingShapes.push(shape);
-        this.renderingManager.clearCanvas();
-      },
-      (shape: BaseShape) => {
-        const i = this.existingShapes.findIndex(s => s.getShapeId() === shape.getShapeId());
-
-        if (i !== -1) {
-          this.existingShapes[i] = shape
-        } else {
-          this.existingShapes.push(shape)
-
-        }
-        this.renderingManager.clearCanvas();
-
-      },
-      (shapeId: string) => {
-        const index = this.existingShapes.findIndex(s => s.getShapeId() === shapeId);
-        if (index !== -1) {
-          this.existingShapes.splice(index, 1);
-          this.renderingManager.clearCanvas();
-        }
-
-
-      },
       (shape: Shape, messageType: string) => {
         if (messageType === 'modification') {
           this.existingShapes = this.existingShapes.filter(
@@ -274,6 +249,7 @@ export class Game {
     const selectedShape = this.selectionManager.getSelectedShape()
     if (selectedShape) {
       this.selectionManager.setSelectedShape(null);
+      this.selectionManager.setSelectedShapeWithBounds(null)
       this.renderingManager.clearCanvas();
     }
 
@@ -349,8 +325,10 @@ export class Game {
         const shape = this.existingShapes.find(s => s.getShapeId() === action.shapeId);
 
         if (action.action === 'add') {
-          const tempShape = ShapeFactory.createShapeFromData(action.shapeData);
-          await this.collaborationManager.updateStore(tempShape, 'shapeDelete', this.dbPromise);
+          const currentShape = this.existingShapes.find(s => s.getShapeId() === action.shapeId);
+          if (currentShape) {
+            await this.collaborationManager.updateStore(currentShape, 'shapeDelete', this.dbPromise);
+          }
         } else if (action.action === 'delete' && shape) {
           await this.collaborationManager.updateStore(shape, 'chat', this.dbPromise);
         } else if (action.action === 'modify' && shape) {
@@ -359,9 +337,10 @@ export class Game {
         }
       }
       this.selectionManager.setSelectedShape(null);
+      this.renderingManager.setPreviewShape(null);
       this.renderingManager.clearCanvas();
-    }
 
+    }
   }
 
   redo = async () => {
@@ -515,17 +494,17 @@ export class Game {
           (shape) => this.shapesToDelete.has(shape.getShapeId())
         );
 
-        if (this.commandManager) {
-          shapesToDeleteArray.forEach(shape => {
-            this.commandManager!.delete(shape); //delete from stack 
-          });
-        }
+        shapesToDeleteArray.forEach(shape => {
+          const index = this.existingShapes.findIndex(s => s.getShapeId() === shape.getShapeId());
+          if (index !== -1) {
+            this.existingShapes[index].markAsDeleted();
 
-        for (let i = this.existingShapes.length - 1; i >= 0; i--) {
-          if (this.shapesToDelete.has(this.existingShapes[i].getShapeId())) {
-            this.existingShapes.splice(i, 1);
+            if (this.commandManager) {
+              this.commandManager.delete(this.existingShapes[index]); //delete from stack
+            }
           }
-        }
+        });
+
         this.shapesToDelete.clear()
 
         if (!this.isOnline) {
@@ -538,14 +517,9 @@ export class Game {
 
         if (this.isOnline && this.socket) {
 
-          shapesToDeleteArray.forEach(shape => {
-            this.socket!.send(JSON.stringify({
-              type: 'shapeDelete',
-              roomId: this.roomId,
-              shapeId: shape.getShapeId(),
-              sessionId: this.sessionId,
-            }));
-          });
+          for (const shape of shapesToDeleteArray) {
+            await this.collaborationManager.updateStore(shape, 'shapeDelete', this.dbPromise);
+          }
         }
 
         this.renderingManager.clearCanvas();
@@ -630,25 +604,26 @@ export class Game {
   hanldeEraser = (e: MouseEvent) => {
     const { pixelX, pixelY } = this.getMousePixelCoords(e.clientX, e.clientY);
 
-    let found = false;
     this.ctx.save();
     const hitLineWidth = this.hitTolerance / this.scale;
     this.ctx.lineWidth = hitLineWidth;
 
     Object.entries(this.existingPaths).forEach(([id, path]) => {
-      if (!found && this.ctx.isPointInStroke(path, pixelX, pixelY)) {
+      if (this.ctx.isPointInStroke(path, pixelX, pixelY)) {
         const shapeIndex = this.existingShapes.findIndex(shape => shape.getShapeId() === id);
 
-
         if (shapeIndex !== -1 && this.existingShapes[shapeIndex]) {
-          found = true;
-          this.shapesToDelete.add(id);
+          if (this.existingShapes[shapeIndex].getIsDeleted()) {
+            return;
+          }
 
+          this.shapesToDelete.add(id);
           this.existingShapes[shapeIndex].setColor("#b0adadff");
-          this.renderingManager.scheduleClearCanvas();
         }
       }
     });
+
+    this.renderingManager.clearCanvas();
     this.ctx.restore();
   }
 

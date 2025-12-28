@@ -57,10 +57,6 @@ export function useSocket(roomId?: string) {
                             type: "join_room",
                             roomId
                         }));
-
-                        ws?.send(JSON.stringify({
-                            type: "new",
-                        }))
                     }
                 }
             } catch (error) {

@@ -7,8 +7,7 @@ export class RenderingManager {
     private shapeRenderer: ShapeRenderer;
     private Handle_size: number;
     private needsRender = false;
-
-
+    private previewShape: Shape | null = null;
 
     constructor(ctx: CanvasRenderingContext2D, Handle_size: number,
         private getStrokeWidth: () => number,
@@ -92,10 +91,15 @@ export class RenderingManager {
                 break;
 
             case 'pencil':
-                if (shape.points && shape.points.length > 1) {
-                    path.moveTo(shape.points[0].x, shape.points[0].y);
-                    for (let i = 1; i < shape.points.length; i++) {
-                        path.lineTo(shape.points[i].x, shape.points[i].y);
+                if (shape.points && shape.points.length > 0) {
+                    if (shape.points.length === 1) {//creating a square insted as a singel dot cannot have a path 
+                        const pt = shape.points[0];
+                        path.rect(pt.x - 5, pt.y - 5, 10, 10);
+                    } else {
+                        path.moveTo(shape.points[0].x, shape.points[0].y);
+                        for (let i = 1; i < shape.points.length; i++) {
+                            path.lineTo(shape.points[i].x, shape.points[i].y);
+                        }
                     }
                 }
                 break;
@@ -157,6 +161,11 @@ export class RenderingManager {
             this.drawBoundingBox(selectedShape)
         }
         this.getExistingShapes().forEach((shape) => {
+            if (shape.getIsDeleted()) {
+                const existingPaths = this.getExistingPaths();
+                delete existingPaths[shape.getShapeId()];
+                return;
+            }
             const adaptedColor = this.themeBasedColorAdapter(shape.getColor());
 
             const editingTextId = this.getEditingTextId();
@@ -170,6 +179,11 @@ export class RenderingManager {
             this.updateShapePath(shape);
             shape.setColor(originalColor);
         });
+
+        if (this.previewShape) {
+            this.drawAllShapes(this.previewShape);
+        }
+
     }
 
     drawBoundingBox = (shape: any) => {
@@ -209,6 +223,9 @@ export class RenderingManager {
 
     }
 
+    setPreviewShape(shape: Shape | null) {
+        this.previewShape = shape;
+    }
 
     getBoundingBox = (shape: BaseShape) => {
         const { x, y, width, height } = shape.getBounds();
