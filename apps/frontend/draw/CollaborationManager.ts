@@ -17,7 +17,16 @@ const sendMousePosition = throttle((socket: WebSocket, x: number, y: number, use
     }))
 }, 16)
 
+const queuePeriodicSync = throttle((socket: WebSocket, getExistingShapes: () => BaseShape[]) => {
+    const shapes = getExistingShapes();
+    const serialized = shapes.map(shape => shape.serialize());
 
+    socket.send(JSON.stringify({
+        type: "scene-update",
+        message: serialized,
+    }))
+
+}, 30000, { leading: false, trailing: true })
 
 const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, preview: string, sessionId: string) => {
     if (!sessionId) {
@@ -27,7 +36,7 @@ const sendShapePreview = throttle((socket: WebSocket, inputShape: Shape, preview
 
     socket.send(JSON.stringify({
         type: "shapePreview",
-        message: JSON.stringify(inputShape),
+        message: inputShape,
         previewType: preview,
     }))
 }, 16)
@@ -79,13 +88,12 @@ export class CollaborationManager {
                             this.handleRoomUsers(message);
                             break;
                         case 'scene-update':
-                            this.handleSceneUpdate(message);
+                            this.handleSceneUpdate(message.message);
                             break;
                         case 'chat':
                         case 'shapeUpdate':
                         case 'shapeDelete':
-                            const shapeData = JSON.parse(message.message);
-                            this.handleSingleShapeUpdate(shapeData);
+                            this.handleSingleShapeUpdate(message.message);
                             break;
                         case "mouseMovement":
                             const transform = this.getTransform(); //world coord --> screen coord
@@ -94,8 +102,7 @@ export class CollaborationManager {
                             this.onMouseMove(message.sessionId, screenX, screenY, message.username);
                             break;
                         case "shapePreview":
-                            const previewShape = JSON.parse(message.message);
-                            this.onShapePreview(previewShape, message.previewType);
+                            this.onShapePreview(message.message, message.previewType);
                             break;
                         default:
                             break;
@@ -121,10 +128,11 @@ export class CollaborationManager {
             this.socket.send(JSON.stringify({
                 type: opt,
                 roomId: this.roomId,
-                message: JSON.stringify(serialized),
+                message: serialized,
                 shapeId: shapeData.getShapeId(),
                 shapeType: serialized.type,
             }));
+            queuePeriodicSync(this.socket, this.getExistingShapes);
         }
     }
 
@@ -156,13 +164,13 @@ export class CollaborationManager {
         if (this.socket?.readyState === WebSocket.OPEN) {
             this.socket?.send(JSON.stringify({
                 type: "scene-init",
-                message: JSON.stringify(allShapes.map(shape => shape.serialize())),
+                message: allShapes.map(shape => shape.serialize()),
                 targetUserId,
             }))
         }
     }
 
-    handleSceneInit(message: { shapes: string, fromUser: string }) {
+    handleSceneInit(message: { shapes: Shape[], fromUser: string }) {
         if (this.sceneInitialized) {
             return;
         }
@@ -173,7 +181,8 @@ export class CollaborationManager {
 
         this.sceneInitialized = true;
 
-        const remoteShapes = JSON.parse(message.shapes);
+        const remoteShapes = message.shapes;
+
         const localShapes = this.getExistingShapes().map(s => s.serialize());
 
 

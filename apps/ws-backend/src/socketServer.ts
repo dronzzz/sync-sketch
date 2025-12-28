@@ -176,6 +176,7 @@ export class SocketServer {
                 break;
             case 'shapeUpdate':
             case 'shapeDelete':
+            case 'scene-update':
                 handleShapeUpdate(session, this.sessions, parsedData)
                 break;
 

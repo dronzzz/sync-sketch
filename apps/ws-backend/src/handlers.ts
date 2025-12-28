@@ -46,15 +46,15 @@ export const removeUserFromRoom = async (sessionId: string, sessions: Map<string
 
 export const handleChat = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
 
-    const shape = {
+    const shape: any = {
         type: "chat",
         message: parsedData.message,
-        shapeId: parsedData.shapeId,
-        shapeType: parsedData.shapeType,
     }
 
-
     await broadcastToRoom(session, shape, sessions);
+
+    shape.shapeId = parsedData.shapeId;
+    shape.shapeType = parsedData.shapeType;
     await pushToQueue(session, shape);
 }
 
@@ -75,15 +75,18 @@ export const handleMouseMovement = async (session: ClientSession, sessions: Map<
 
 export const handleShapeUpdate = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: parsedData) => {
 
-    const shape = {
+    const shape: any = {
         type: parsedData.type,
         message: parsedData.message,
-        shapeId: parsedData.shapeId,
     }
 
     await broadcastToRoom(session, shape, sessions);
-    await pushToQueue(session, shape);
 
+    if ((parsedData.type as any) !== 'scene-update') {
+
+        shape.shapeId = parsedData.shapeId;
+        await pushToQueue(session, shape);
+    }
 }
 
 export const handleShapePreview = async (session: ClientSession, sessions: Map<string, ClientSession>, parsedData: previewShape) => {
