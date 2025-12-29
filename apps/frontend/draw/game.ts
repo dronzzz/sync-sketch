@@ -278,7 +278,7 @@ export class Game {
       this.renderingManager.clearCanvas();
     }
 
-
+    this.renderingManager.setPreviewShape(null);
     this.selectedTool = tool;
   }
 
@@ -397,18 +397,20 @@ export class Game {
 
 
   mouseHandlers() {
-    this.canvas.addEventListener("mousedown", this.handleMouseDown);
-    this.canvas.addEventListener("mousemove", this.handleMouseMove);
-    this.canvas.addEventListener("mouseup", this.handleMouseUp);
+    this.canvas.addEventListener("pointerdown", this.handleMouseDown);
+    this.canvas.addEventListener("pointermove", this.handleMouseMove);
+    this.canvas.addEventListener("pointerup", this.handleMouseUp);
+    this.canvas.addEventListener("pointercancel", this.handleMouseUp);
     this.canvas.addEventListener('wheel', this.handleMouseWheel)
     document.addEventListener("keydown", this.handleKeys)
   }
 
   destroy() {
 
-    this.canvas.removeEventListener("mousedown", this.handleMouseDown);
-    this.canvas.removeEventListener("mousemove", this.handleMouseMove);
-    this.canvas.removeEventListener("mouseup", this.handleMouseUp);
+    this.canvas.removeEventListener("pointerdown", this.handleMouseDown);
+    this.canvas.removeEventListener("pointermove", this.handleMouseMove);
+    this.canvas.removeEventListener("pointerup", this.handleMouseUp);
+    this.canvas.removeEventListener("pointercancel", this.handleMouseUp);
     this.canvas.removeEventListener('wheel', this.handleMouseWheel)
     document.removeEventListener("keydown", this.handleKeys)
 
@@ -596,6 +598,7 @@ export class Game {
         this.commandManager.add(newShape);
       }
       await this.collaborationManager.updateStore(newShape, 'chat', this.dbPromise);
+      this.renderingManager.setPreviewShape(null);
       this.renderingManager.clearCanvas();
     }
   };

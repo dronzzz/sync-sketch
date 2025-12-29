@@ -5,7 +5,7 @@ import { Game } from "@/draw/game";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { Color } from "react-color";
 import ToolBar from "./ToolBar";
-import { useCursorType } from "@/store/useMouseStore";
+import { useCursorType, useMouseStore } from "@/store/useMouseStore";
 import { useTheme } from "next-themes";
 import MousePositionPointer from "./MousePositionPointer";
 import { ToggleTheme } from "./ToggleTheme";
@@ -17,6 +17,7 @@ import { ActiveUsers } from "./ActiveUsers";
 import { generateSlug } from "@/lib/utils";
 import { BACKEND_URL } from "@/config";
 import { toast } from 'sonner';
+import { useRoomStore } from "@/store/useRoomStore";
 
 export type Tool = "rect" | "ellipse" | "line" | "pencil" | "pointer" | "panTool" | "text" | "diamond" | "arrow" | "eraser";
 
@@ -191,6 +192,8 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         } else {
             setIsSessionActive(false);
             setShareUrl(undefined);
+            useMouseStore.getState().clearUsers();
+            useRoomStore.getState().clearUsers();
         }
     }, [roomId]);
 

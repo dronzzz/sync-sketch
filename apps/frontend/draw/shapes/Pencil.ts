@@ -20,10 +20,10 @@ export class Pencil extends BaseShape {
 
 
         const stroke = getStroke(points, {
-            size: this.lineWidth * 2,
+            size: this.lineWidth * 1.3,
             thinning: 0.5,
-            smoothing: 0.5,
-            streamline: 0.5,
+            smoothing: 0.7,
+            streamline: 0.7,
             easing: t => t
         });
 

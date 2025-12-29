@@ -8,6 +8,7 @@ type MouseStore = {
   mousePositions: MouseData;
   setMousePosition: (userId: string, x: number, y: number, username: string) => void;
   removeUser: (userId: string) => void;
+  clearUsers: () => void;
 };
 
 export const useMouseStore = create<MouseStore>((set) => ({
@@ -26,11 +27,13 @@ export const useMouseStore = create<MouseStore>((set) => ({
       const { [userId]: _, ...rest } = state.mousePositions;
       return { mousePositions: rest };
     }),
+
+  clearUsers: () => set({ mousePositions: {} }),
 }));
 
-type CursorType ={
-  cursorType : string;
-  setCursorType : (cursor : string ) => void;
+type CursorType = {
+  cursorType: string;
+  setCursorType: (cursor: string) => void;
 }
 
 

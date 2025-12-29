@@ -34,7 +34,7 @@ export default function ColorPicker({
     return (
 
         <div
-            className="flex flex-row cursor-pointer absolute bottom-18 right-29.5 sm:bottom-18 sm:right-15 rounded-md dark:bg-[#1a1a1a] shadow-even"
+            className="flex flex-row cursor-pointer z-50 absolute bottom-18 right-15 rounded-md bg-white dark:bg-[#1a1a1a] shadow-even border border-gray-200 dark:border-none p-0 max-[420px]:flex-col max-[420px]:bottom-[70px] max-[420px]:right-4 max-[420px]:p-1"
         >
             {visibleColors.map((color) => (
                 <div
