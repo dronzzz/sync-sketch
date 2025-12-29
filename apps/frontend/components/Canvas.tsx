@@ -39,6 +39,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
     const [textScale, setTextScale] = useState<number>(1)
     const [textFontSize, setTextFontSize] = useState<number>(TEXT_CONFIG.FONT_SIZE)
     const [textWidth, setTextWidth] = useState<number>(100)
+    const [textShapeColor, setTextShapeColor] = useState<string>("currentColor")
 
     const handleShare = () => {
         if (!game) {
@@ -56,11 +57,13 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         setShareDialogOpen(true);
     };
 
-    const handleTextEditing = (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => {
+    const handleTextEditing = (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number, color: string) => {
         setTextPosition({ x, y });
         setTextScale(scale);
         setTextFontSize(fontSize);
         setTextWidth(textWidth);
+        setTextShapeId(id);
+        setTextShapeColor(color);
         setIsEditing(true);
         setTimeout(() => {
             if (textInputRef.current) {
@@ -83,6 +86,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         // Set scale and fontSize for new text creation
         setTextScale(game?.getScale() || 1);
         setTextFontSize(TEXT_CONFIG.FONT_SIZE);
+        setTextShapeColor(selectedColor.hex || (resolvedTheme === 'dark' ? '#d3d3d3' : 'black'));
         setIsEditing(true);
 
     }
@@ -181,6 +185,16 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
     };
 
     useEffect(() => {
+        if (roomId) {
+            setIsSessionActive(true);
+            setShareUrl(`${window.location.origin}/canvas/${roomId}`);
+        } else {
+            setIsSessionActive(false);
+            setShareUrl(undefined);
+        }
+    }, [roomId]);
+
+    useEffect(() => {
         if (game) {
             game.clearCanvas()
         }
@@ -198,8 +212,10 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         if (game) {
             if (resolvedTheme === "dark") {
                 game.setTheme("#0d0c09");
+                setSelectedColor((prev: Color) => prev.hex === "#1f1f1f" ? { hex: "#d3d3d3" } : prev);
             } else {
                 game.setTheme("#ffffff");
+                setSelectedColor((prev: Color) => prev.hex === "#d3d3d3" ? { hex: "#1f1f1f" } : prev);
             }
         }
     }, [resolvedTheme, game]);
@@ -211,8 +227,8 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
         if (!game) {
 
             const g = new Game(canvasRef.current, socket, roomId, resolvedTheme === "dark" ? '#0d0c09' : '#ffffff',
-                (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => {
-                    handleTextEditing(text, x, y, id, scale, fontSize, textWidth);
+                (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number, color: string) => {
+                    handleTextEditing(text, x, y, id, scale, fontSize, textWidth, color);
 
                 }
             );
@@ -260,7 +276,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
                         minWidth: `${Math.max(100, textWidth)}px`,
                         maxWidth: `${(windowSize.width || 0) - textPosition.x - 20}px`,
                         background: 'transparent',
-                        color: selectedColor.hex || (resolvedTheme === 'dark' ? '#d3d3d3' : 'black'),
+                        color: textShapeColor,
                         fontSize: `${textFontSize * textScale}px`,
                         fontFamily: TEXT_CONFIG.FONT_FAMILY,
                         fontWeight: TEXT_CONFIG.FONT_WEIGHT,

@@ -56,7 +56,7 @@ export class Game {
   }
 
   constructor(canvas: HTMLCanvasElement, socket?: WebSocket | null, roomId?: string | null, theme?: string,
-    private setTextAreaForEditing?: (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number) => void
+    private setTextAreaForEditing?: (text: string, x: number, y: number, id: string, scale: number, fontSize: number, textWidth: number, color: string) => void
   ) {
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d")!;
@@ -185,12 +185,14 @@ export class Game {
     this.socket = socket;
     this.roomId = roomId;
     this.sessionId = sessionId;
+    this.isOnline = true;
     this.collaborationManager.upgradeConnection(socket, roomId, sessionId);
   }
   downgradeToOffline() {
     this.socket = null;
     this.roomId = null;
     this.sessionId = null;
+    this.isOnline = false;
     this.collaborationManager.downgradeConnection();
   }
 
@@ -232,7 +234,8 @@ export class Game {
         textid,
         this.scale,
         typography.fontSize,
-        textWidth
+        textWidth,
+        typography.color
       );
     }
 
