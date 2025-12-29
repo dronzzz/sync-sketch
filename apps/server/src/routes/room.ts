@@ -84,18 +84,34 @@ router.post("/create-room", middleware, async (req, res) => {    //currenlty rem
 });
 
 
-router.get("/chats/:roomId", async (req, res) => {
-    const { roomId } = req.params;
+router.get("/chats/:slug", async (req, res) => {
+    try {
+        const { slug } = req.params;
 
-    const messages = await prisma.chat.findMany({
-        where: {
-            roomId,
-            isDeleted: false,
-        },
-        orderBy: { id: "desc" },
-    });
+        // 1. Find the DB room.id using the slug
+        const room = await prisma.room.findFirst({
+            where: { slug }
+        });
 
-    res.json({ messages });
+        if (!room) {
+            res.status(404).json({ error: "Room not found" });
+            return;
+        }
+
+        // 2. Fetch chats using the DB room.id
+        const messages = await prisma.chat.findMany({
+            where: {
+                roomId: room.id,
+                isDeleted: false,
+            },
+            orderBy: { id: "desc" },
+        });
+
+        res.json({ messages });
+    } catch (error) {
+        console.error("Fetch chats by slug error:", error);
+        res.status(500).json({ error: "Failed to fetch chats" });
+    }
 });
 
 

@@ -148,35 +148,19 @@ export class Game {
   async init() {
     this.ctx.fillStyle = this.currentTheme
     this.ctx.strokeStyle = this.selectedColor
-    this.isOnline = !!(this.socket && this.roomId);
     this.dbPromise = await initDB()
 
-    if (!this.isOnline) {
-
-      const shapes = await getAllShapes(this.dbPromise);   //from local indexdb
-
+    if (this.roomId) {
+      this.existingShapes.length = 0;
+      this.sceneInitialized = false;
+    } else {
+      const shapes = await getAllShapes(this.dbPromise); //from local indexdb
       this.existingShapes.length = 0;
       this.existingShapes.push(...shapes.map((shapeData: Shape) =>
         ShapeFactory.createShapeFromData(shapeData)
       ));
       this.sceneInitialized = true;
-
-    } else {
-      this.sceneInitTimeout = setTimeout(async () => {
-        if (!this.sceneInitialized) {
-          const shapes = await getExistingShapes(this.roomId!);
-
-          this.existingShapes.length = 0;
-          this.existingShapes.push(...shapes.map((shapeData: Shape) =>
-            ShapeFactory.createShapeFromData(shapeData)
-          ));
-
-          this.sceneInitialized = true;
-          this.renderingManager.clearCanvas();
-        }
-      }, 3000);
     }
-
 
     this.commandManager = new CommandManager(this.existingShapes, () => this.renderingManager.clearCanvas());
     this.renderingManager.clearCanvas();
@@ -186,8 +170,33 @@ export class Game {
     this.roomId = roomId;
     this.sessionId = sessionId;
     this.isOnline = true;
+
+    if (this.sceneInitTimeout) {
+      clearTimeout(this.sceneInitTimeout);
+      this.sceneInitTimeout = null;
+    }
+
+    if (!this.sceneInitialized) {
+      this.sceneInitTimeout = setTimeout(async () => {
+        if (!this.sceneInitialized) {
+          const shapes = await getExistingShapes(this.roomId!);
+          this.existingShapes.length = 0;
+          this.existingShapes.push(...shapes.map((shapeData: Shape) =>
+            ShapeFactory.createShapeFromData(shapeData)
+          ));
+          this.sceneInitialized = true;
+          this.renderingManager.clearCanvas();
+        }
+      }, 3000);
+    }
+
     this.collaborationManager.upgradeConnection(socket, roomId, sessionId);
   }
+
+  getSocket(): WebSocket | null {
+    return this.socket;
+  }
+
   downgradeToOffline() {
     this.socket = null;
     this.roomId = null;

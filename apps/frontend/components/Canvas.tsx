@@ -236,7 +236,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
             return;
         }
 
-        if (roomId && socket && sessionId && !game.isOnline) {
+        if (roomId && socket && sessionId && (!game.isOnline || game.getSocket() !== socket)) {
             console.log("upgrading to online")
             game.upgradeToOnline(socket, roomId, sessionId);
         }

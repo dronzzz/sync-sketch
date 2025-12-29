@@ -29,11 +29,9 @@ export default async function ({
             );
         }
 
-        const { roomId } = await resp.json();
-
         return (
             <div>
-                <CanvasClient roomId={roomId} />
+                <CanvasClient roomId={slug} />
             </div>
         );
     } catch (error) {

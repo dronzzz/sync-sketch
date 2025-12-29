@@ -122,6 +122,7 @@ export class CollaborationManager {
         this.roomId = roomId;
         this.sessionId = sessionId;
         this.isOnline = !!(this.socket && this.roomId);
+        this.sceneInitialized = false;
         this.initHandlers()
     }
     downgradeConnection() {
