@@ -32,6 +32,7 @@ export class TextShape extends BaseShape {
     ctx.save();
     ctx.fillStyle = this.color;
     ctx.font = `${TEXT_CONFIG.FONT_WEIGHT} ${this.fontSize}px ${TEXT_CONFIG.FONT_FAMILY}`;
+    (ctx as any).letterSpacing = TEXT_CONFIG.LETTER_SPACING;
     const lines = this.textContent.split('\n');
     this.noOfLines = lines.length;
     this.lineHeight = this.fontSize * TEXT_CONFIG.LINE_HEIGHT;
@@ -51,6 +52,7 @@ export class TextShape extends BaseShape {
 
     const ctx = document.createElement('canvas').getContext('2d')!;
     ctx.font = `${TEXT_CONFIG.FONT_WEIGHT} ${this.fontSize}px ${TEXT_CONFIG.FONT_FAMILY}`;
+    (ctx as any).letterSpacing = TEXT_CONFIG.LETTER_SPACING;
 
     const lines = this.textContent.split('\n');
 

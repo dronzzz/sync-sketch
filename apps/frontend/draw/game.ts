@@ -427,9 +427,10 @@ export class Game {
 
   getMousePixelCoords(clientX: number, clientY: number) {  //screen coord -->pixel coord
     const rect = this.canvas.getBoundingClientRect();
+    const dpr = 2; // Doubled canvas dimensions
     return {
-      pixelX: clientX - rect.left,
-      pixelY: clientY - rect.top
+      pixelX: (clientX - rect.left) * dpr,
+      pixelY: (clientY - rect.top) * dpr
     };
   }
 
@@ -458,7 +459,7 @@ export class Game {
 
     const canvasCoords = this.getUpdatedMouseCoords(position.x, position.y);
 
-    const fontSize = TEXT_CONFIG.FONT_SIZE * this.scale;
+    const fontSize = TEXT_CONFIG.FONT_SIZE;
 
     const textShape = new TextShape(
       canvasCoords.x,

@@ -73,6 +73,7 @@ export class ShapeRenderer {
         this.ctx.fillStyle = shape.color;
         const fontSize = shape.fontSize || TEXT_CONFIG.FONT_SIZE;
         this.ctx.font = `${TEXT_CONFIG.FONT_WEIGHT} ${fontSize}px ${TEXT_CONFIG.FONT_FAMILY}`;
+        (this.ctx as any).letterSpacing = TEXT_CONFIG.LETTER_SPACING;
         const lines = shape.textContent.split('\n');
         const lineHeight = fontSize * TEXT_CONFIG.LINE_HEIGHT;
 

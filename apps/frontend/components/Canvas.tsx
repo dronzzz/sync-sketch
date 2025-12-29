@@ -248,8 +248,10 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
 
     return (
         <div className="relative w-full h-screen overflow-hidden">
-            <canvas ref={canvasRef} height={windowSize.height} width={windowSize.width} className={`relative bg-white dark:bg-[#0d0c09] touch-none ${cursorType}`
-            }
+            <canvas ref={canvasRef} height={windowSize.height * 2} width={windowSize.width * 2}
+                style={{ width: `${windowSize.width}px`, height: `${windowSize.height}px` }}
+                className={`relative bg-white dark:bg-[#0d0c09] touch-none ${cursorType}`
+                }
                 onClick={handleCanvasClick}
                 onDoubleClick={handleCanvasDoubleClick}
             />
@@ -280,6 +282,7 @@ export default function Canvas({ roomId, setRoomId, socket, loading, sessionId }
                         fontSize: `${textFontSize * textScale}px`,
                         fontFamily: TEXT_CONFIG.FONT_FAMILY,
                         fontWeight: TEXT_CONFIG.FONT_WEIGHT,
+                        letterSpacing: `${parseFloat(TEXT_CONFIG.LETTER_SPACING) * textScale}px`,
                         lineHeight: `${TEXT_CONFIG.LINE_HEIGHT}`,
                         height: 'auto',
                         padding: '0',

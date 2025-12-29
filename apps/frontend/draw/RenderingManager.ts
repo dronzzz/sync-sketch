@@ -148,17 +148,23 @@ export class RenderingManager {
         const currentTheme = this.getTheme();
         const strokeWidth = this.getStrokeWidth();
         const { canvasWidth, canvasHeight } = this.getCanvasSize();
-        this.ctx.setTransform(scale, 0, 0, scale, panX, panY);
+        const dpr = 2;
+
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
+        this.ctx.setTransform(scale * dpr, 0, 0, scale * dpr, panX * dpr, panY * dpr);
+
         this.ctx.fillStyle = currentTheme;
-        this.ctx.fillRect(-panX / scale, -panY / scale, canvasWidth / scale, canvasHeight / scale);
+        this.ctx.fillRect(-panX / scale, -panY / scale, canvasWidth / (scale * dpr), canvasHeight / (scale * dpr));
 
         this.ctx.lineWidth = strokeWidth / scale;
 
 
         const selectedShape = this.getSelectedShape();
-        if (selectedShape) {
+        const editingTextId = this.getEditingTextId();
+
+        if (selectedShape && selectedShape.getShapeId() !== editingTextId) {
             this.drawBoundingBox(selectedShape)
         }
         const shapesToDelete = this.getShapesToDelete();

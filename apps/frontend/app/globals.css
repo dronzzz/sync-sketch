@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Patrick Hand';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/PatrickHand-Regular.woff2') format('woff2');
+}
+
 @import "tailwindcss";
 
 
