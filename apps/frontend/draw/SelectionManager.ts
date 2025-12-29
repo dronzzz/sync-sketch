@@ -107,10 +107,18 @@ export class SelectionManager {
         this.ctx.save();
         const hitLineWidth = this.hitTolerance / this.getTransform().scale;
         this.ctx.lineWidth = hitLineWidth;
+
+        const shapesMap = new Map(this.getExistingShapes().map(s => [s.getShapeId(), s]));
         Object.entries(existingPaths).forEach(([id, path]) => {
-            if (this.ctx.isPointInStroke(path, pixelX, pixelY)) {
+            const shape = shapesMap.get(id);
+            if (!shape) return;
+            const isText = (shape as any).getText !== undefined;
+            if (isText && this.ctx.isPointInPath(path, pixelX, pixelY)) {
                 this.isHovering = true;
-                this.selectionState.selectedShape = this.getExistingShapes().find(shape => shape.getShapeId() === id) ?? null;
+                this.selectionState.selectedShape = shape;
+            } else if (this.ctx.isPointInStroke(path, pixelX, pixelY)) {
+                this.isHovering = true;
+                this.selectionState.selectedShape = shape;
             }
         })
         this.ctx.restore();

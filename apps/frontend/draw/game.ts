@@ -112,7 +112,8 @@ export class Game {
       () => this.existingPaths,
       () => this.selectionManager.getSelectedShapeWithBounds(),
       () => ({ canvasWidth: this.canvas.width, canvasHeight: this.canvas.height }),
-      () => this.getEditingTextId()
+      () => this.getEditingTextId(),
+      () => this.shapesToDelete
     );
 
     this.selectionManager = new SelectionManager(
@@ -483,6 +484,7 @@ export class Game {
 
     if (this.selectedTool === "eraser") {
       this.isEraserDragging = true;
+      this.hanldeEraser(e);
     }
 
     if (this.selectedTool === "pointer") {
@@ -633,17 +635,14 @@ export class Game {
     const hitLineWidth = this.hitTolerance / this.scale;
     this.ctx.lineWidth = hitLineWidth;
 
+    const shapesMap = new Map(this.existingShapes.map(s => [s.getShapeId(), s]));
     Object.entries(this.existingPaths).forEach(([id, path]) => {
-      if (this.ctx.isPointInStroke(path, pixelX, pixelY)) {
-        const shapeIndex = this.existingShapes.findIndex(shape => shape.getShapeId() === id);
-
-        if (shapeIndex !== -1 && this.existingShapes[shapeIndex]) {
-          if (this.existingShapes[shapeIndex].getIsDeleted()) {
-            return;
-          }
-
+      const shape = shapesMap.get(id);
+      if (shape) {
+        if (shape.getIsDeleted()) return;
+        const isText = (shape as any).getText !== undefined;
+        if ((isText && this.ctx.isPointInPath(path, pixelX, pixelY)) || this.ctx.isPointInStroke(path, pixelX, pixelY)) {
           this.shapesToDelete.add(id);
-          this.existingShapes[shapeIndex].setColor("#b0adadff");
         }
       }
     });

@@ -18,6 +18,7 @@ export class RenderingManager {
         private getSelectedShape: () => BaseShape | null,
         private getCanvasSize: () => { canvasWidth: number, canvasHeight: number },
         private getEditingTextId: () => string | null,
+        private getShapesToDelete: () => Set<string> = () => new Set(),
     ) {
         this.ctx = ctx;
         this.shapeRenderer = new ShapeRenderer(this.ctx);
@@ -160,13 +161,13 @@ export class RenderingManager {
         if (selectedShape) {
             this.drawBoundingBox(selectedShape)
         }
+        const shapesToDelete = this.getShapesToDelete();
         this.getExistingShapes().forEach((shape) => {
             if (shape.getIsDeleted()) {
                 const existingPaths = this.getExistingPaths();
                 delete existingPaths[shape.getShapeId()];
                 return;
             }
-            const adaptedColor = this.themeBasedColorAdapter(shape.getColor());
 
             const editingTextId = this.getEditingTextId();
             if (editingTextId && shape.getShapeId() === editingTextId) {
@@ -174,6 +175,10 @@ export class RenderingManager {
             }
 
             const originalColor = shape.getColor();
+            const adaptedColor = shapesToDelete.has(shape.getShapeId())
+                ? "#b0adadff"
+                : this.themeBasedColorAdapter(originalColor);
+
             shape.setColor(adaptedColor);
             shape.draw(this.ctx);
             this.updateShapePath(shape);
